@@ -20,11 +20,11 @@ signals:
   min_score: 70            # порог силы трендового сигнала 0..100
   min_agree: 5             # минимум трендовых модулей «за»
   require_htf: true
-  htf_mode: strict         # strict — тренд 4H должен совпадать; loose — просто не против
+  htf_mode: loose          # v3.2: loose — тренд 4H не против сделки (на 1H лучше strict во всех итогах)
   btc_filter: true
-  btc_mode: block          # block — альты против тренда BTC 4H не торгуем; penalty — только штраф
+  btc_mode: penalty        # penalty — сигнал против тренда BTC 4H получает штраф; block — запрет
   sides: both              # both | long_only | short_only
-  strict_shorts: true      # трендовый шорт только когда 4H монеты И 4H BTC медвежьи
+  strict_shorts: false     # true — шорт только когда 4H монеты И 4H BTC медвежьи
   cooldown_minutes: 480
   max_signals_per_run: 5
   max_open_signals: 20
@@ -87,10 +87,10 @@ risk:
   trail_atr: 3.0           # трейлинг = лучшая цена − 3 ATR
   tp2_r: 3.0               # используется только при exit_mode: fixed
   ttl_hours: 168           # максимум 7 дней в сделке
-  risk_per_trade_pct: 1.0
+  risk_per_trade_pct: 0.5  # макс. просадка на истории ~35R → при 0.5% это ~17% депозита
 
 costs:                     # издержки на ОДНУ сторону сделки
-  fee_pct: 0.075           # спот Binance taker. Фьючерсы USDT-M taker ≈ 0.045–0.05
+  fee_pct: 0.045           # фьючерсы Binance USDT-M taker с BNB. Для спота поставь 0.075
   slippage_pct: 0.03
 
 backtest:
@@ -108,27 +108,23 @@ telegram:
 # Варианты для `python backtest.py --experiments` — все на одних данных, 3 периода.
 # Рабочий вариант — в плюсе во ВСЕХ периодах.
 experiments:
-  - name: "v3.1 тренд + фильтр толпы (config)"
+  - name: "v3.2 (config): тренд 1H/4H мягкий + фильтр толпы, фьючерсы"
     set: {}
-  - name: "v3.1 + комиссии фьючерсов"
-    set: {costs: {fee_pct: 0.045}}
-  - name: "без фильтра толпы"
-    set: {contrarian: {crowd_filter: false}}
-  - name: "фильтр толпы строже (z ≥ 1.5)"
-    set: {contrarian: {crowd_filter_z: 1.5}}
-  - name: "фильтр толпы мягче (z ≥ 2.5)"
-    set: {contrarian: {crowd_filter_z: 2.5}}
-  - name: "+ фильтр Fear & Greed"
-    set: {contrarian: {fng_filter: true}}
-  - name: "мягкий фильтр тренда 4H/BTC"
-    set: {signals: {htf_mode: loose, btc_mode: penalty, strict_shorts: false}}
-  - name: "сила ≥ 66"
+  - name: "v3.2 + сила ≥ 66"
     set: {signals: {min_score: 66}}
-  - name: "сила ≥ 75"
-    set: {signals: {min_score: 75}}
-  - name: "фиксированный TP2 вместо трейлинга"
+  - name: "v3.2 + фильтр Fear & Greed"
+    set: {contrarian: {fng_filter: true}}
+  - name: "v3.2 без фильтра толпы"
+    set: {contrarian: {crowd_filter: false}}
+  - name: "v3.2 со строгим трендом (как v3.1)"
+    set: {signals: {htf_mode: strict, btc_mode: block, strict_shorts: true}}
+  - name: "v3.2 с комиссиями спота"
+    set: {costs: {fee_pct: 0.075}}
+  - name: "v3.2 фиксированный TP2"
     set: {risk: {exit_mode: fixed, ttl_hours: 72}}
-  - name: "трейлинг 4 ATR"
+  - name: "v3.2 трейлинг 2 ATR"
+    set: {risk: {trail_atr: 2.0}}
+  - name: "v3.2 трейлинг 4 ATR"
     set: {risk: {trail_atr: 4.0}}
-  - name: "только лонги (справочно)"
+  - name: "v3.2 только лонги (справочно)"
     set: {signals: {sides: long_only}}

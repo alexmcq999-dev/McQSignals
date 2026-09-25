@@ -225,7 +225,8 @@ def test_v2_filters(cfg):
     d = synth(3000, seed=5)
     loose = load_config(overrides={"signals": {"htf_mode": "loose", "btc_mode": "penalty", "strict_shorts": False}})
     a = analyze(d, resample(d), btc, loose)
-    b = analyze(d, resample(d), btc, cfg)
+    strict = load_config(overrides={"signals": {"htf_mode": "strict", "btc_mode": "block", "strict_shorts": True}})
+    b = analyze(d, resample(d), btc, strict)
     lo = load_config(overrides={"signals": {"sides": "long_only"}})
     c = analyze(d, resample(d), btc, lo)
     assert (c.signal < 0).sum() == 0
@@ -242,7 +243,9 @@ def test_cost_filter_and_min_stop(cfg):
     o = analyze(d, resample(d), btc, load_config(overrides={"signals": {"min_score": 40, "min_agree": 3}}))
     row = o.iloc[np.flatnonzero(o.signal.to_numpy() != 0)[0]]
     t = make_trade(row, int(row.signal), "X", cfg)
-    assert t.cost_r == pytest.approx(2 * 0.105 / 100 * t.entry / t.risk, rel=1e-3)
+    from src.engine import cost_pct
+
+    assert t.cost_r == pytest.approx(2 * cost_pct(cfg) / 100 * t.entry / t.risk, rel=1e-3)
     assert trade_ok(t, cfg) == (t.cost_r <= cfg["risk"]["max_cost_r"])
     wide = load_config(overrides={"risk": {"sl_min_pct": 3.0}})
     t2 = make_trade(row, int(row.signal), "X", wide)
@@ -261,8 +264,9 @@ def test_experiments_synthetic(tmp_path, monkeypatch):
     assert txt.count("\n| ▫️") + txt.count("\n| ✅") >= 10 and "П3" in txt
 
 
-def test_default_config_is_v31(cfg):
+def test_default_config_is_v32(cfg):
     """Боевой конфиг: контртрендовая ветка выключена, фильтр толпы включён."""
     assert cfg["contrarian"]["enabled"] is False
     assert cfg["contrarian"]["crowd_filter"] is True
     assert cfg["timeframes"]["entry"] == "1h" and cfg["risk"]["exit_mode"] == "trail"
+    assert cfg["signals"]["htf_mode"] == "loose" and cfg["costs"]["fee_pct"] == 0.045
