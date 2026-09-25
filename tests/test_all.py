@@ -105,9 +105,10 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(store, "STATE_DIR", tmp_path)
     monkeypatch.setattr(data, "STATE_DIR", tmp_path)
 
-    now = pd.Timestamp.now(tz="UTC").floor("15min")
+    # фиксированное время → детерминированный тест (не зависит от времени суток запуска)
+    now = pd.Timestamp("2026-06-10 12:03", tz="UTC")
     n = 900
-    start = now - pd.Timedelta(minutes=15 * (n - 1))
+    start = now.floor("15min") - pd.Timedelta(minutes=15 * (n - 1))
     frames = {f"C{i}": synth(n, seed=i, start=str(start.tz_convert(None))) for i in range(40)}
     frames["BTC"] = synth(n, seed=999, start=str(start.tz_convert(None)))
 
@@ -122,11 +123,13 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
 
     monkeypatch.setattr(scan, "pick_provider", lambda: (Fake(), Fake().tickers()))
     monkeypatch.setattr(data, "_coingecko_caps", lambda: [{"symbol": k, "name": k, "mcap": 2e8} for k in frames])
-    monkeypatch.setattr(sys, "argv", ["scan.py", "--dry-run"])
+    monkeypatch.setattr(sys, "argv", ["scan.py", "--dry-run", "--now", now.isoformat()])
     # лояльный порог, чтобы гарантированно увидеть сигнал на последних свечах
     orig = scan.load_config
     monkeypatch.setattr(scan, "load_config", lambda: orig(overrides={
-        "signals": {"min_score": 30, "min_agree": 3, "lookback_bars_on_run": 40}}))
+        "signals": {"min_score": 30, "min_agree": 3, "lookback_bars_on_run": 40, "htf_mode": "loose",
+                    "btc_mode": "penalty", "strict_shorts": False},
+        "risk": {"max_cost_r": 0}}))
     scan.main()
     st = store.load("signals")
     assert (tmp_path / "universe.json").exists()

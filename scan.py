@@ -93,13 +93,16 @@ def handle_commands(tg: TG, cfg, subs, sig, hist):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--now", help="ISO-время UTC для воспроизведения прогона (тесты/отладка)")
     args = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
     cfg = load_config()
     tg = TG(dry_run=args.dry_run)
     sig, hist, subs = store.load("signals"), store.load("history"), store.load("subscribers")
-    now = pd.Timestamp.now(tz="UTC")
+    now = pd.Timestamp(args.now) if args.now else pd.Timestamp.now(tz="UTC")
+    if now.tzinfo is None:
+        now = now.tz_localize("UTC")
 
     def chats():
         return list(dict.fromkeys(tg.fixed + [str(c) for c in subs["chats"]])) or ["dry-run"]
