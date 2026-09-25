@@ -3,5 +3,4 @@ __pycache__/
 .pytest_cache/
 .env
 state/*.tmp
-reports/backtest_trades.csv
 .DS_Store

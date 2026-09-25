@@ -186,7 +186,8 @@ def _coingecko_caps() -> list[dict]:
         d = _get("https://api.coingecko.com/api/v3/coins/markets",
                  {"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250, "page": page},
                  headers=headers, timeout=25)
-        out += [{"symbol": c["symbol"].upper(), "name": c["name"], "mcap": c.get("market_cap") or 0} for c in d]
+        out += [{"symbol": c["symbol"].upper(), "name": c["name"], "mcap": c.get("market_cap") or 0,
+                 "vol": c.get("total_volume") or 0} for c in d]
         time.sleep(1.5)
     return out
 
@@ -194,8 +195,8 @@ def _coingecko_caps() -> list[dict]:
 def _coinpaprika_caps() -> list[dict]:
     d = _get("https://api.coinpaprika.com/v1/tickers", {"quotes": "USD"}, timeout=40)
     d = sorted(d, key=lambda c: c.get("rank") or 10**9)[:600]
-    return [{"symbol": c["symbol"].upper(), "name": c["name"], "mcap": c["quotes"]["USD"].get("market_cap") or 0}
-            for c in d]
+    return [{"symbol": c["symbol"].upper(), "name": c["name"], "mcap": c["quotes"]["USD"].get("market_cap") or 0,
+             "vol": c["quotes"]["USD"].get("volume_24h") or 0} for c in d]
 
 
 def _excluded(sym: str, name: str, extra: set[str]) -> bool:
@@ -208,7 +209,7 @@ def build_universe(cfg: dict, provider, tickers: dict[str, float], force=False) 
     uc = cfg["universe"]
     path = STATE_DIR / "universe.json"
     cache = json.loads(path.read_text()) if path.exists() else None
-    if cache and not force and cache.get("provider") == provider.name:
+    if cache and not force and cache.get("provider") == provider.name and cache.get("v") == 2:
         age_h = (time.time() - cache["updated_ts"]) / 3600
         if age_h < uc["refresh_hours"]:
             return cache["assets"]
@@ -242,6 +243,11 @@ def build_universe(cfg: dict, provider, tickers: dict[str, float], force=False) 
             continue
         if qv < uc["min_quote_volume_24h_usd"]:
             continue
+        # Защита от совпадения тикеров: общий объём монеты по всем биржам (CoinGecko) не может быть
+        # сильно меньше объёма одной биржи — значит под этим тикером на бирже другая монета.
+        if m and m.get("vol") and m["vol"] < 0.2 * qv:
+            log.info("Пропуск %s: объём CoinGecko %.0f ≪ биржи %.0f (другая монета с тем же тикером?)", base, m["vol"], qv)
+            continue
         assets.append({"base": base, "name": name, "mcap": m["mcap"] if m else None, "qvol": qv})
     assets.sort(key=lambda a: a["qvol"], reverse=True)
     assets = assets[: uc["max_assets"]]
@@ -251,7 +257,7 @@ def build_universe(cfg: dict, provider, tickers: dict[str, float], force=False) 
     STATE_DIR.mkdir(exist_ok=True)
     path.write_text(json.dumps({
         "updated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "updated_ts": time.time(), "provider": provider.name, "cap_source": src, "assets": assets,
+        "v": 2, "updated_ts": time.time(), "provider": provider.name, "cap_source": src, "assets": assets,
     }, ensure_ascii=False, indent=1))
     log.info("Вселенная: %d монет (капа: %s)", len(assets), src)
     return assets

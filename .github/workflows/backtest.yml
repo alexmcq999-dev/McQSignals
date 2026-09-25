@@ -11,9 +11,11 @@ on:
       symbols:
         description: "Сколько монет (топ по ликвидности)"
         default: "25"
-      grid:
-        description: "Перебор порогов (true/false)"
-        default: "false"
+      mode:
+        description: "report — обычный отчёт · grid — перебор порогов · experiments — сравнение вариантов (120д)"
+        type: choice
+        options: [report, grid, experiments]
+        default: report
 
 permissions:
   contents: write
@@ -25,7 +27,7 @@ concurrency:
 jobs:
   backtest:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
 
@@ -43,10 +45,18 @@ jobs:
           COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
           DATA_PROVIDER: ${{ vars.DATA_PROVIDER }}
         run: |
-          ARGS="--days ${{ github.event.inputs.days || '60' }} --symbols ${{ github.event.inputs.symbols || '25' }}"
-          if [ "${{ github.event.inputs.grid }}" = "true" ]; then ARGS="$ARGS --grid"; fi
-          python backtest.py $ARGS
-          cat reports/*latest.md >> "$GITHUB_STEP_SUMMARY"
+          MODE="${{ github.event.inputs.mode || 'report' }}"
+          ARGS="--symbols ${{ github.event.inputs.symbols || '25' }}"
+          if [ "$MODE" = "experiments" ]; then
+            python backtest.py $ARGS --experiments
+            cat reports/experiments_latest.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$MODE" = "grid" ]; then
+            python backtest.py $ARGS --days ${{ github.event.inputs.days || '60' }} --grid
+            cat reports/grid_latest.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            python backtest.py $ARGS --days ${{ github.event.inputs.days || '60' }}
+            cat reports/backtest_latest.md >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
@@ -57,7 +67,7 @@ jobs:
         run: |
           git config user.name  "mcq-bot"
           git config user.email "mcq-bot@users.noreply.github.com"
-          git add reports/*.md state/universe.json || true
+          git add reports/ state/universe.json || true
           if git diff --staged --quiet; then exit 0; fi
           git commit -m "backtest report [skip ci]"
           git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push

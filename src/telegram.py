@@ -29,6 +29,10 @@ class TG:
             raise TGError(data.get("error_code"), data.get("description"))
         return data["result"]
 
+    def check(self) -> str:
+        """Проверяет токен. Возвращает @username бота или бросает TGError."""
+        return "@" + self._call("getMe")["username"]
+
     def send(self, chat, text, reply_to=None) -> int | None:
         if not self.enabled:
             print(f"\n--- [{chat}] ---\n{text}\n")
@@ -40,6 +44,8 @@ class TG:
             return self._call("sendMessage", **params)["message_id"]
         except TGError as e:
             log.warning("sendMessage %s: %s", chat, e)
+            # аннотация видна прямо на странице запуска в GitHub Actions
+            print(f"::error title=Telegram::Не удалось отправить в чат {chat}: {e}", flush=True)
             if e.code == 403:  # пользователь заблокировал бота
                 raise
             return None

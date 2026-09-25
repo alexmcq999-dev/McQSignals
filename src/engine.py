@@ -66,9 +66,18 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
         & (f["vol_z"] > -1.0)
     )
     if sc.get("require_htf", True):
-        ok &= (htf * direction) >= 0
-    cond_long = ok & (direction > 0)
-    cond_short = ok & (direction < 0)
+        if sc.get("htf_mode", "loose") == "strict":
+            ok &= htf == direction  # тренд 1H должен СОВПАДАТЬ с направлением
+        else:
+            ok &= (htf * direction) >= 0  # достаточно, чтобы не был против
+    if not is_btc and sc.get("btc_mode", "penalty") == "block":
+        ok &= (btc * direction) >= 0  # альты не торгуем против тренда BTC 1H
+    sides = sc.get("sides", "both")
+    cond_long = ok & (direction > 0) & (sides != "short_only")
+    cond_short = ok & (direction < 0) & (sides != "long_only")
+    if sc.get("strict_shorts", False):
+        # шорт только когда медвежьи и 1H монеты, и 1H BTC
+        cond_short &= (htf == -1) & ((btc == -1) if not is_btc else True)
     # Триггер: условие появилось на ЭТОМ баре (событие, а не состояние)
     trig_long = cond_long & ~cond_long.shift(1, fill_value=False)
     trig_short = cond_short & ~cond_short.shift(1, fill_value=False)
@@ -103,6 +112,7 @@ class Trade:
     conf: float = 0.0
     regime: str = ""
     reasons: list = field(default_factory=list)
+    cost_r: float = 0.0  # издержки туда-обратно в R
     status: str = "open"  # open | tp1 | closed
     exit_reason: str = ""
     r_gross: float = 0.0
@@ -133,6 +143,7 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
         dist = struct - e
     dist = float(np.clip(dist, rk["sl_min_atr"] * a, rk["sl_max_atr"] * a))
     dist = min(dist, e * rk["sl_max_pct"] / 100)
+    dist = max(dist, e * rk.get("sl_min_pct", 0.0) / 100)  # слишком узкий стоп съедается комиссией
     sl = e - side * dist
     reasons = [m for m in MODULES if ("v_" + m) in row and row["v_" + m] * side > 0.3]
     return Trade(
@@ -147,7 +158,20 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
         conf=round(float(row["conf"]), 1),
         regime=str(row["regime"]),
         reasons=reasons,
+        cost_r=round(2 * cost_pct(cfg) / 100 * e / dist, 4),
     )
+
+
+def cost_pct(cfg: dict) -> float:
+    """Издержки на одну сторону сделки, % (комиссия + проскальзывание)."""
+    c = cfg.get("costs") or cfg.get("backtest", {})
+    return float(c.get("fee_pct", 0.0)) + float(c.get("slippage_pct", 0.0))
+
+
+def trade_ok(t: Trade, cfg: dict) -> bool:
+    """Отсекает сделки, где комиссии съедают слишком большую долю риска."""
+    mx = cfg["risk"].get("max_cost_r", 0) or 0
+    return mx <= 0 or t.cost_r <= mx
 
 
 def update_trade(t: Trade, bar: pd.Series, cfg: dict, fee_pct: float = 0.0) -> list[str]:

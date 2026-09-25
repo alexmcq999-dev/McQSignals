@@ -16,7 +16,7 @@ from src import store
 from src.config import load_config
 from src.data import build_universe, fetch_many, pick_provider, split_closed
 from src.engine import Trade, analyze, update_trade
-from src.engine import make_trade
+from src.engine import make_trade, trade_ok
 from src.strategies import MODULES
 from src.telegram import TG, event_text, signal_text, stats_text, fp
 
@@ -108,6 +108,17 @@ def main():
         if str(c) in subs["chats"]:
             subs["chats"].remove(str(c))
 
+    if tg.enabled:
+        try:
+            log.info("Telegram: бот %s, фиксированных чатов: %d", tg.check(), len(tg.fixed))
+        except Exception as e:  # noqa: BLE001
+            print(f"::error title=Telegram::Токен не работает ({e}). Проверь секрет TELEGRAM_BOT_TOKEN", flush=True)
+    elif not args.dry_run:
+        print("::error title=Telegram::Секрет TELEGRAM_BOT_TOKEN не задан — сигналы не отправляются", flush=True)
+    if tg.enabled and not tg.fixed:
+        print("::warning title=Telegram::TELEGRAM_CHAT_ID не задан — сигналы получат только те, кто написал боту /start",
+              flush=True)
+
     try:
         handle_commands(tg, cfg, subs, sig, hist)
     except Exception as e:  # noqa: BLE001
@@ -172,6 +183,9 @@ def main():
             continue
         row = fresh.iloc[-1]
         t = make_trade(row, int(row["signal"]), b, cfg)
+        if not trade_ok(t, cfg):
+            log.info("%s: стоп слишком узкий, комиссии %.2fR — пропуск", b, t.cost_r)
+            continue
         drift = t.side * (last_price - t.entry) / t.risk
         if not -0.5 < drift < 0.5:
             log.info("%s: цена уже ушла (%.2fR) — пропуск", b, drift)

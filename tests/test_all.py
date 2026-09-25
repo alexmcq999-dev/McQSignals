@@ -174,3 +174,44 @@ def test_providers_parsing(monkeypatch):
         last = df.iloc[-1]
         assert last["open"] == rows[-1][1] and last["close"] == rows[-1][4] and last["high"] == rows[-1][2], P.name
         assert (df["high"] >= df["low"]).all()
+
+
+def test_v2_filters(cfg):
+    """Строгие режимы только сокращают сигналы и не создают новых."""
+    btc = resample(synth(3000, seed=999))
+    d = synth(3000, seed=5)
+    loose = load_config(overrides={"signals": {"htf_mode": "loose", "btc_mode": "penalty", "strict_shorts": False}})
+    a = analyze(d, resample(d), btc, loose)
+    b = analyze(d, resample(d), btc, cfg)
+    lo = load_config(overrides={"signals": {"sides": "long_only"}})
+    c = analyze(d, resample(d), btc, lo)
+    assert (c.signal < 0).sum() == 0
+    s_b = b[b.signal < 0]
+    assert ((s_b.htf_bias == -1) & (s_b.btc_htf_bias == -1)).all()
+    assert (b[b.signal > 0].htf_bias == 1).all()
+
+
+def test_cost_filter_and_min_stop(cfg):
+    from src.engine import trade_ok
+
+    btc = resample(synth(3000, seed=999))
+    d = synth(3000, seed=2)
+    o = analyze(d, resample(d), btc, load_config(overrides={"signals": {"min_score": 40, "min_agree": 3}}))
+    row = o.iloc[np.flatnonzero(o.signal.to_numpy() != 0)[0]]
+    t = make_trade(row, int(row.signal), "X", cfg)
+    assert t.cost_r == pytest.approx(2 * 0.105 / 100 * t.entry / t.risk, rel=1e-3)
+    assert trade_ok(t, cfg) == (t.cost_r <= cfg["risk"]["max_cost_r"])
+    wide = load_config(overrides={"risk": {"sl_min_pct": 3.0}})
+    t2 = make_trade(row, int(row.signal), "X", wide)
+    assert t2.risk >= t2.entry * 0.03 - 1e-9 and t2.cost_r < t.cost_r + 1e-12
+
+
+def test_experiments_synthetic(tmp_path, monkeypatch):
+    import backtest
+    from src import config
+
+    monkeypatch.setattr(backtest, "REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["backtest.py", "--synthetic", "--experiments", "--days", "40", "--symbols", "4"])
+    backtest.main()
+    txt = (tmp_path / "experiments_latest.md").read_text()
+    assert txt.count("\n| v") >= 5 and "Период A" in txt

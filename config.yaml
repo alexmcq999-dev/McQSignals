@@ -16,10 +16,14 @@ timeframes:
   bars_confirm: 400
 
 signals:
-  min_score: 66            # порог силы сигнала 0..100 (выше = меньше, но качественнее)
+  min_score: 70            # порог силы сигнала 0..100 (выше = меньше, но качественнее)
   min_agree: 5             # минимум модулей, голосующих «за»
-  require_htf: true        # не торговать против тренда 1H
-  btc_filter: true         # штраф альтам за сигнал против тренда BTC 1H
+  require_htf: true        # учитывать тренд 1H
+  htf_mode: strict         # strict — тренд 1H должен совпадать; loose — просто не против
+  btc_filter: true         # бонус/штраф альтам за совпадение с трендом BTC 1H
+  btc_mode: block          # block — альты против тренда BTC не торгуем; penalty — только штраф
+  sides: both              # both | long_only | short_only
+  strict_shorts: true      # шорт только когда 1H монеты И 1H BTC медвежьи
   cooldown_minutes: 240    # не повторять сигнал по монете чаще
   max_signals_per_run: 5
   max_open_signals: 12     # лимит одновременно открытых сигналов
@@ -44,17 +48,50 @@ risk:
   sl_max_atr: 2.5     # и не дальше 2.5 ATR
   sl_swing_buffer_atr: 0.25
   sl_max_pct: 4.0     # и не дальше 4% от входа
+  sl_min_pct: 0.0     # и не ближе X% (0 = выкл.)
+  max_cost_r: 0.2     # пропускать сделку, если комиссии туда-обратно > 0.2R (узкий стоп). 0 = выкл.
   tp1_r: 1.5          # TP1 = 1.5R
   tp2_r: 3.0          # TP2 = 3R
   tp1_close_frac: 0.5 # на TP1 закрываем 50%, стоп в безубыток
   ttl_hours: 24       # сигнал закрывается по времени
   risk_per_trade_pct: 1.0  # для подсказки размера позиции в сообщении
 
+costs:                 # издержки на ОДНУ сторону сделки
+  fee_pct: 0.075       # спот Binance taker со скидкой BNB. Фьючерсы USDT-M taker ≈ 0.045–0.05
+  slippage_pct: 0.03
+
 backtest:
   days: 60
   symbols: 25          # топ-N монет по ликвидности
-  fee_pct: 0.075       # комиссия за сторону, % (taker Binance со скидкой BNB)
-  slippage_pct: 0.03   # проскальзывание за сторону, %
+  experiments_days: 120  # для --experiments: 2 периода по 60 дней
+
+# Варианты для `python backtest.py --experiments` — сравниваются на ОДНИХ данных.
+# Каждый вариант = отличия от config.yaml. «v1» воспроизводит первую версию бота.
+experiments:
+  - name: "v1 (первая версия)"
+    set:
+      signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false, sides: both}
+      risk: {max_cost_r: 0, sl_min_pct: 0}
+  - name: "v1 + фильтр издержек ≤0.2R"
+    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0.2, sl_min_pct: 0}}
+  - name: "v1 + мин. стоп 1%"
+    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 1.0}}
+  - name: "v1 + строгий тренд 1H и BTC"
+    set: {signals: {min_score: 66, htf_mode: strict, btc_mode: block, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 0}}
+  - name: "v1 + строгие шорты"
+    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: true}, risk: {max_cost_r: 0, sl_min_pct: 0}}
+  - name: "v1 + сила ≥70"
+    set: {signals: {min_score: 70, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 0}}
+  - name: "v1 только лонги (справочно)"
+    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false, sides: long_only}, risk: {max_cost_r: 0, sl_min_pct: 0}}
+  - name: "v2 (текущий config)"
+    set: {}
+  - name: "v2 + мин. стоп 1% вместо фильтра"
+    set: {risk: {max_cost_r: 0, sl_min_pct: 1.0}}
+  - name: "v2 без модуля «откат к EMA»"
+    set: {signals: {modules: [ema_trend, supertrend, macd, rsi_regime, stoch_rsi, donchian, squeeze, bb_reversion, rsi_divergence, vwap_obv]}}
+  - name: "v2 с комиссиями фьючерсов"
+    set: {costs: {fee_pct: 0.045, slippage_pct: 0.03}}
 
 telegram:
   allow_public_subscribe: true  # false — сигналы только в TELEGRAM_CHAT_ID (приватный бот)
