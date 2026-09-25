@@ -79,9 +79,30 @@ def test_trade_tp1_then_be(cfg):
 
 
 def test_trade_short_tp2(cfg):
+    fixed = load_config(overrides={"risk": {"exit_mode": "fixed"}})
     t = _trade(-1)
-    assert update_trade(t, _bar(100.5, 93.5, 94), cfg) == ["tp1", "tp2"]
+    assert update_trade(t, _bar(100.5, 93.5, 94), fixed) == ["tp1", "tp2"]
     assert t.r_gross == pytest.approx(0.5 * 1.5 + 0.5 * 3.0)
+
+
+def test_trade_trailing(cfg):
+    """Трейлинг: после TP1 стоп подтягивается за лучшей ценой и срабатывает только со следующей свечи."""
+    tr = load_config(overrides={"risk": {"exit_mode": "trail", "trail_atr": 3.0}})
+    t = _trade(1)
+    t.atr, t.peak = 1.0, 100.0          # риск 2, TP1 = 103
+    assert update_trade(t, _bar(103.5, 100.5, 103, "2026-01-01T01:00:00+00:00"), tr) == ["tp1"]
+    assert t.sl == pytest.approx(100.5)  # max(б/у 100, 103.5 − 3) = 100.5
+    assert update_trade(t, _bar(110, 104, 109, "2026-01-01T02:00:00+00:00"), tr) == []
+    assert t.sl == pytest.approx(107.0)  # 110 − 3
+    assert update_trade(t, _bar(109, 106, 106.5, "2026-01-01T03:00:00+00:00"), tr) == ["trail"]
+    assert t.r_gross == pytest.approx(0.5 * 1.5 + 0.5 * (107 - 100) / 2)
+
+
+def test_ttl_is_time_based(cfg):
+    t = _trade(1)
+    ttl = cfg["risk"]["ttl_hours"]
+    late = (pd.Timestamp(t.opened) + pd.Timedelta(hours=ttl)).isoformat()
+    assert update_trade(t, _bar(101, 99, 100.8, late), cfg) == ["timeout"]
 
 
 def test_levels_sane(cfg):
@@ -107,7 +128,7 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
 
     # фиксированное время → детерминированный тест (не зависит от времени суток запуска)
     now = pd.Timestamp("2026-06-10 12:03", tz="UTC")
-    n = 900
+    n = 4 * 1200  # 15m свечи → 1200 часовых
     start = now.floor("15min") - pd.Timedelta(minutes=15 * (n - 1))
     frames = {f"C{i}": synth(n, seed=i, start=str(start.tz_convert(None))) for i in range(40)}
     frames["BTC"] = synth(n, seed=999, start=str(start.tz_convert(None)))
@@ -119,9 +140,25 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
             return {k: 5e7 for k in frames}
 
         def klines(self, b, tf, limit, end_ms=None):
-            return (frames[b] if tf == "15m" else resample(frames[b])).tail(limit).reset_index(drop=True)
+            rule = {"15m": None, "1h": "1h", "4h": "4h"}[tf]
+            df = frames[b] if rule is None else resample(frames[b], rule)
+            return df.tail(limit).reset_index(drop=True)
 
     monkeypatch.setattr(scan, "pick_provider", lambda: (Fake(), Fake().tickers()))
+    # толпа / F&G / новости — без сети
+    days = pd.date_range(end=now.floor("D") - pd.Timedelta(days=1), periods=20, freq="D")
+    rng = np.random.default_rng(0)
+    fake_cache = {k: {"fsym": k + "USDT", "days": {d.strftime("%Y-%m-%d"): {
+        "ls_acc": float(np.exp(rng.normal(0.3, 0.2))), "ls_top": float(np.exp(rng.normal(0, 0.2))),
+        "taker": 1.0, "oi": 1e8} for d in days}} for k in frames}
+    monkeypatch.setattr(scan.cw, "fetch_metrics", lambda bases, ds, *a, **k: fake_cache)
+    monkeypatch.setattr(scan.cw, "fetch_fng", lambda *a, **k: pd.DataFrame(
+        {"fng": [75] * 20, "usable_time": days + pd.Timedelta(days=1)}))
+    monkeypatch.setattr(scan.nw, "load", lambda cfg: {
+        "news": [{"title": "SEC одобрила ETF", "assets": "BTC, ETH", "bias": "bullish", "official": True,
+                  "ts": (now - pd.Timedelta(hours=2)).isoformat()}],
+        "sentiment": {"fng": {"crypto": {"value": 75, "rating_ru": "жадность"}}},
+        "calendar": [{"ts": (now + pd.Timedelta(hours=5)).isoformat(), "title": "CPI", "impact": "High"}]})
     monkeypatch.setattr(data, "_coingecko_caps", lambda: [{"symbol": k, "name": k, "mcap": 2e8} for k in frames])
     monkeypatch.setattr(sys, "argv", ["scan.py", "--dry-run", "--now", now.isoformat()])
     # лояльный порог, чтобы гарантированно увидеть сигнал на последних свечах
@@ -133,6 +170,9 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
     scan.main()
     st = store.load("signals")
     assert (tmp_path / "universe.json").exists()
+    import json as _j
+    app = _j.loads((tmp_path / "app_signals.json").read_text())
+    assert app["open"] and {"symbol", "side", "entry", "sl", "r_open"} <= set(app["open"][0])
     assert len(st["last_bar"]) >= 40
     out = capsys.readouterr().out
     assert len(st["open"]) > 0 and ("LONG" in out or "SHORT" in out)
@@ -214,7 +254,8 @@ def test_experiments_synthetic(tmp_path, monkeypatch):
     from src import config
 
     monkeypatch.setattr(backtest, "REPORTS_DIR", tmp_path)
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path)
     monkeypatch.setattr(sys, "argv", ["backtest.py", "--synthetic", "--experiments", "--days", "40", "--symbols", "4"])
     backtest.main()
     txt = (tmp_path / "experiments_latest.md").read_text()
-    assert txt.count("\n| v") >= 5 and "Период A" in txt
+    assert txt.count("\n| ▫️") + txt.count("\n| ✅") >= 10 and "П3" in txt

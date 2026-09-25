@@ -105,27 +105,64 @@ def bar(score: float) -> str:
 ARROW = {1: "↑ бычий", -1: "↓ медвежий", 0: "→ нейтр."}
 
 
-def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: int) -> str:
-    rk = cfg["risk"]
+def news_line(ctx: dict | None, cfg: dict) -> str:
+    if not ctx or not cfg.get("news", {}).get("show_in_signal", True):
+        return ""
+    parts = []
+    if ctx["bull"] or ctx["bear"] or ctx["mixed"]:
+        parts.append(f"новости по крипте 🟢{ctx['bull']} 🔴{ctx['bear']} 🟡{ctx['mixed']}")
+    if ctx.get("fng") is not None:
+        parts.append(f"F&G {ctx['fng']} ({ctx['fng_ru']})")
+    ev = ctx.get("next_event")
+    if ev is not None:
+        tz = cfg.get("telegram", {}).get("timezone", "Europe/Moscow")
+        parts.append(f"⚠️ {html.escape(str(ev.get('title', '')))} {ev['t'].tz_convert(tz).strftime('%d.%m %H:%M')}")
+    return ("📰 Фон: " + " · ".join(parts) + "\n") if parts else ""
+
+
+def crowd_line(row: pd.Series) -> str:
+    z, g = row.get("ls_acc_z"), row.get("fng")
+    parts = []
+    if z is not None and pd.notna(z):
+        who = "перегружена лонгами" if z >= 1.5 else "перегружена шортами" if z <= -1.5 else "без перекоса"
+        parts.append(f"толпа {who} (z {z:+.1f})")
+    if g is not None and pd.notna(g):
+        parts.append(f"F&G {g:.0f}")
+    return ("👥 " + " · ".join(parts) + "\n") if parts else ""
+
+
+def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: int, nctx: dict | None = None) -> str:
+    rk, tf = cfg["risk"], cfg["timeframes"]
     side = "🟢 <b>LONG" if t.side > 0 else "🔴 <b>SHORT"
     sl_pct = pct(t.entry, t.sl)
     size = rk["risk_per_trade_pct"] / abs(sl_pct) * 100
-    reasons = "\n".join(f"• {MODULES[m][0]}" for m in t.reasons)
+    reasons = "\n".join(f"• {MODULES[m][0]}" for m in t.reasons if m in MODULES)
     tz = cfg.get("telegram", {}).get("timezone", "Europe/Moscow")
     ctime = pd.Timestamp(t.opened).ceil("min").tz_convert(tz).strftime("%d.%m %H:%M")
     tzl = {"Europe/Moscow": "МСК", "UTC": "UTC"}.get(tz, tz)
     btc = "" if t.symbol == "BTC" else f" · BTC: {ARROW[int(row.get('btc_htf_bias', 0))]}"
+    if rk.get("exit_mode", "fixed") == "trail":
+        rest = (f"Остаток: трейлинг-стоп {rk.get('trail_atr', 3.0):g}×ATR от лучшей цены "
+                f"(≈ {fp(rk.get('trail_atr', 3.0) * t.atr)}), без потолка прибыли\n")
+    else:
+        rest = f"TP2: <code>{fp(t.tp2)}</code> ({pct(t.entry, t.tp2):+.2f}%) · {rk['tp2_r']}R\n"
+    test = ("🧪 <b>ТЕСТ</b> — сигнал для проверки стратегии, не для торговли\n\n"
+            if cfg.get("telegram", {}).get("test_mode") else "")
+    kind = ("🔄 <b>Контртренд</b>: против толпы после снятия стопов\n" if t.kind == "contra" else "")
     return (
-        f"{side} · {html.escape(t.symbol)}/USDT</b> · 15m\n"
+        f"{test}{side} · {html.escape(t.symbol)}/USDT</b> · {tf['entry'].upper()}\n{kind}"
         f"Сила: <b>{t.conf:.0f}/100</b> {bar(t.conf)}\n"
-        f"Режим: {REGIME_RU.get(t.regime, t.regime)} (ADX {row['adx']:.0f}) · 1H: {ARROW[int(row['htf_bias'])]}{btc}\n\n"
+        f"Режим: {REGIME_RU.get(t.regime, t.regime)} (ADX {row['adx']:.0f}) · "
+        f"{tf['confirm'].upper()}: {ARROW[int(row['htf_bias'])]}{btc}\n\n"
         f"Вход: <code>{fp(t.entry)}</code>\n"
         f"Стоп: <code>{fp(t.sl)}</code> ({sl_pct:+.2f}%)\n"
-        f"TP1: <code>{fp(t.tp1)}</code> ({pct(t.entry, t.tp1):+.2f}%) · {rk['tp1_r']}R — закрыть {int(rk['tp1_close_frac']*100)}%, стоп в б/у\n"
-        f"TP2: <code>{fp(t.tp2)}</code> ({pct(t.entry, t.tp2):+.2f}%) · {rk['tp2_r']}R\n\n"
+        f"TP1: <code>{fp(t.tp1)}</code> ({pct(t.entry, t.tp1):+.2f}%) · {rk['tp1_r']}R — закрыть "
+        f"{int(rk['tp1_close_frac'] * 100)}%, стоп в б/у\n"
+        f"{rest}\n"
         f"✅ Подтверждения {len(t.reasons)}/{n_modules}:\n{reasons}\n\n"
+        f"{crowd_line(row)}{news_line(nctx, cfg)}"
         f"💼 Риск {rk['risk_per_trade_pct']:g}% депо → позиция ≈ {size:.0f}% депо\n"
-        f"⏳ Действует {rk['ttl_hours']}ч · свеча {ctime} {tzl} · {provider} · #{t.id}\n"
+        f"⏳ Макс. {rk['ttl_hours']}ч · свеча {ctime} {tzl} · {provider} · #{t.id}\n"
         f"<i>Не финансовый совет.</i>"
     )
 
@@ -135,6 +172,7 @@ EVENT_TEXT = {
     "tp2": "🎯 <b>TP2 взят</b> — сделка закрыта: <b>{r:+.2f}R</b>",
     "sl": "❌ <b>Стоп</b> — сделка закрыта: <b>{r:+.2f}R</b>",
     "be": "⚪️ <b>Безубыток</b> — остаток закрыт в б/у, итог <b>{r:+.2f}R</b>",
+    "trail": "📈 <b>Трейлинг-стоп</b> — остаток закрыт, итог <b>{r:+.2f}R</b>",
     "timeout": "⏱ <b>Закрыто по времени</b> — итог <b>{r:+.2f}R</b>",
 }
 
@@ -156,6 +194,7 @@ def stats_text(trades: list[dict], title: str) -> str:
         f"Итого: <b>{s['total_r']:+.2f}R</b> · средн. {s['avg_r']:+.2f}R\n"
         f"Profit factor: {s['pf']:.2f} · макс. просадка {s['max_dd']:.1f}R\n"
         f"TP2: {s['by_exit'].get('tp2', 0)} · TP1→б/у: {s['by_exit'].get('be', 0)} · "
-        f"стоп: {s['by_exit'].get('sl', 0)} · время: {s['by_exit'].get('timeout', 0)}\n"
+        f"трейлинг: {s['by_exit'].get('trail', 0)} · стоп: {s['by_exit'].get('sl', 0)} · "
+        f"время: {s['by_exit'].get('timeout', 0)}\n"
         f"<i>R — в единицах риска, без комиссий.</i>"
     )

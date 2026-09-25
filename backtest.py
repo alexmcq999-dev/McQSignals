@@ -61,9 +61,10 @@ def simulate(out: pd.DataFrame, symbol: str, cfg: dict, start_time, end_time=Non
     return trades
 
 
-def prepare(data: dict, btc_h1) -> dict:
+def prepare(data: dict, btc_htf, fng=None) -> dict:
     """Фичи не зависят от порогов — считаем один раз на монету."""
-    return {sym: build_features(d15, d1h, None if sym == "BTC" else btc_h1) for sym, (d15, d1h) in data.items()}
+    return {sym: build_features(dE, dC, None if sym == "BTC" else btc_htf, crowd, fng)
+            for sym, (dE, dC, crowd) in data.items()}
 
 
 def run(feats: dict, cfg: dict, start_time, end_time=None) -> list[dict]:
@@ -92,7 +93,8 @@ def report(trades: list[dict], cfg: dict, meta: dict) -> str:
     s = summarize(trades, "r_net")
     lines = [f"# Бэктест McQ Signals — {meta['date']}", "",
              f"Период: {meta['days']} дн. · монет: {meta['n_symbols']} · источник: {meta['provider']} · "
-             f"TF 15m + 1H · комиссия+проскальзывание {cost_pct(cfg):.3f}%/сторона",
+             f"TF {cfg['timeframes']['entry'].upper()} + {cfg['timeframes']['confirm'].upper()} · "
+             f"выход: {cfg['risk'].get('exit_mode', 'fixed')} · комиссия+проскальзывание {cost_pct(cfg):.3f}%/сторона",
              f"Порог силы: {cfg['signals']['min_score']} · мин. модулей: {cfg['signals']['min_agree']}", ""]
     if not s["n"]:
         return "\n".join(lines + ["Сделок нет — снизь min_score / min_agree."])
@@ -109,6 +111,8 @@ def report(trades: list[dict], cfg: dict, meta: dict) -> str:
     half = len(trades) // 2
     lines += [_row("Первая половина периода", trades[:half]), _row("Вторая половина периода", trades[half:])]
     lines += [_row("LONG", [t for t in trades if t["side"] > 0]), _row("SHORT", [t for t in trades if t["side"] < 0])]
+    lines += [_row("Трендовые сигналы", [t for t in trades if t.get("kind", "trend") == "trend"]),
+              _row("Контртрендовые (против толпы)", [t for t in trades if t.get("kind") == "contra"])]
     for reg in ("trend", "neutral", "range"):
         lines.append(_row(f"Режим: {reg}", [t for t in trades if t["regime"] == reg]))
     for lo, hi in ((0, 70), (70, 80), (80, 101)):
@@ -143,33 +147,57 @@ def tg_summary(trades, cfg, meta) -> str:
 
 # ------------------------------------------------------------------ загрузка
 
+RULE = {"15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1D"}
+
+
 def load_live(cfg, days, n_symbols):
+    from src import crowd as cw
+    from src.config import ROOT, TF_MINUTES
     from src.data import build_universe, fetch_many, pick_provider, split_closed
 
+    tf = cfg["timeframes"]
     provider, tickers = pick_provider()
     uni = build_universe(cfg, provider, tickers)[:n_symbols]
     bases = [a["base"] for a in uni]
-    n15, n1h = days * 96 + 400, days * 24 + 260
-    k15 = fetch_many(provider, bases, "15m", n15)
-    k1h = fetch_many(provider, list(dict.fromkeys(bases + ["BTC"])), "1h", n1h)
+    nE = int(days * 1440 / TF_MINUTES[tf["entry"]]) + 400
+    nC = int(days * 1440 / TF_MINUTES[tf["confirm"]]) + 260
+    kE = fetch_many(provider, bases, tf["entry"], nE)
+    kC = fetch_many(provider, list(dict.fromkeys(bases + ["BTC"])), tf["confirm"], nC)
     now = pd.Timestamp.now(tz="UTC")
-    data = {b: (split_closed(k15[b], now)[0], split_closed(k1h[b], now)[0]) for b in bases if b in k15 and b in k1h}
-    btc = split_closed(k1h["BTC"], now)[0] if "BTC" in k1h else None
-    return data, btc, provider.name
+
+    crowd_tbls, fng = {}, None
+    if cfg.get("contrarian", {}).get("enabled") or any(
+            (e.get("set") or {}).get("contrarian") for e in cfg.get("experiments", [])):
+        ndays = days + cfg.get("crowd", {}).get("z_window_days", 14) + 3
+        cache = cw.fetch_metrics(bases, cw.recent_days(now, ndays), ROOT / ".cache" / "crowd" / "metrics.json")
+        crowd_tbls = {b: cw.crowd_table(cache, b, cfg) for b in bases}
+        fng = cw.fetch_fng(ROOT / ".cache" / "crowd" / "fng.json")
+        log.info("Толпа: данные есть по %d/%d монетам; F&G: %s", sum(v is not None for v in crowd_tbls.values()),
+                 len(bases), "да" if fng is not None else "нет")
+
+    data = {b: (split_closed(kE[b], now)[0], split_closed(kC[b], now)[0], crowd_tbls.get(b))
+            for b in bases if b in kE and b in kC}
+    btc = split_closed(kC["BTC"], now)[0] if "BTC" in kC else None
+    return data, btc, fng, provider.name
 
 
-def load_synthetic(days, n_symbols):
+def load_synthetic(cfg, days, n_symbols):
     import sys
     sys.path.insert(0, "tests")
     from synth import resample, synth
 
-    n = days * 96 + 400
-    btc15 = synth(n, seed=999)
+    from src.config import TF_MINUTES
+
+    tf = cfg["timeframes"]
+    m = TF_MINUTES[tf["entry"]]
+    n = int(days * 1440 / m) + 400
+    rule = RULE[tf["confirm"]]
+    btc = synth(n, seed=999, tf_min=m)
     data = {}
     for i in range(n_symbols):
-        d = synth(n, seed=i)
-        data[f"SYN{i}"] = (d, resample(d))
-    return data, resample(btc15), "synthetic"
+        d = synth(n, seed=i, tf_min=m)
+        data[f"SYN{i}"] = (d, resample(d, rule), None)
+    return data, resample(btc, rule), None, "synthetic"
 
 
 def _cell(tr):
@@ -180,38 +208,47 @@ def _cell(tr):
     return f"{s['n']} | {s['winrate']:.0f}% | {s['avg_r']:+.3f} | {pf}"
 
 
-def experiments(feats, cfg, first, mid, last, meta) -> tuple[str, list]:
-    """Все варианты на одних данных. Период A (старый) и B (свежий) считаются раздельно."""
+def experiments(feats, cfg, first, last, meta) -> tuple[str, list]:
+    """Все варианты на одних данных, период разбит на k фолдов — каждый считается отдельно."""
+    k = int(cfg["backtest"].get("folds", 3))
+    edges = [first + (last - first) * i / k for i in range(k + 1)]
+    edges[-1] = last + pd.Timedelta(minutes=1)
     rows, summary = [], []
     for ex in cfg.get("experiments", []):
         c = load_config(overrides=ex.get("set") or {})
-        a = run(feats, c, first, mid)
-        b = run(feats, c, mid, last + pd.Timedelta(minutes=1))
-        sa, sb = summarize(a, "r_net"), summarize(b, "r_net")
-        rows.append(f"| {ex['name']} | {_cell(a)} | {_cell(b)} |")
-        summary.append((ex["name"], sa, sb))
-        log.info("exp %-40s A: n=%d avg=%+.3f | B: n=%d avg=%+.3f", ex["name"], sa.get("n", 0), sa.get("avg_r", 0),
-                 sb.get("n", 0), sb.get("avg_r", 0))
-    fmt = "%d.%m"
+        folds = [run(feats, c, edges[i], edges[i + 1]) for i in range(k)]
+        ss = [summarize(tr, "r_net") for tr in folds]
+        allr = summarize(sum(folds, []), "r_net")
+        ok = all(x.get("n", 0) >= 10 and x.get("avg_r", -1) > 0 for x in ss)
+        cells = " | ".join(f"{x.get('n', 0)} / {x.get('avg_r', 0):+.3f}" for x in ss)
+        pf = allr.get("pf", 0)
+        rows.append(f"| {'✅' if ok else '▫️'} {ex['name']} | {cells} | {allr.get('n', 0)} | "
+                    f"{allr.get('winrate', 0):.0f}% | {allr.get('avg_r', 0):+.3f} | "
+                    f"{'∞' if pf == float('inf') else f'{pf:.2f}'} | {allr.get('max_dd', 0):.1f} |")
+        summary.append((ex["name"], ss, allr, ok))
+        log.info("exp %-45s %s", ex["name"], cells)
+    fmt = "%d.%m.%y"
+    heads = " | ".join(f"П{i + 1} {edges[i].strftime(fmt)}–{edges[i + 1].strftime(fmt)}" for i in range(k))
     text = "\n".join([
         f"# Эксперименты McQ Signals — {meta['date']}", "",
-        f"Монет: {meta['n_symbols']} · источник: {meta['provider']} · 15m + 1H · R после комиссий", "",
-        f"- **Период A** {first.strftime(fmt)}–{mid.strftime(fmt)} — старые данные, при настройке v2 их НЕ смотрели (честная проверка)",
-        f"- **Период B** {mid.strftime(fmt)}–{last.strftime(fmt)} — по нему делали выводы после первого бэктеста", "",
-        "| Вариант | A: сделок | A: WR | A: ср. R | A: PF | B: сделок | B: WR | B: ср. R | B: PF |",
-        "|---|---|---|---|---|---|---|---|---|", *rows, "",
-        "> Рабочий вариант — тот, что в плюсе в ОБОИХ периодах (особенно в A) и даёт хотя бы 1–2 сделки в день. "
-        "Улучшение только в B при провале в A — это подгонка под историю.",
+        f"Монет: {meta['n_symbols']} · источник: {meta['provider']} · "
+        f"{cfg['timeframes']['entry'].upper()} + {cfg['timeframes']['confirm'].upper()} · R после комиссий", "",
+        "В ячейках периодов: `сделок / средний R на сделку`. ✅ — в плюсе во ВСЕХ периодах (и ≥10 сделок в каждом).", "",
+        f"| Вариант | {heads} | Всего сделок | WR | Ср. R | PF | Макс. просадка R |",
+        "|---" * (k + 6) + "|", *rows, "",
+        "> Рабочий вариант — ✅ и с разумным числом сделок. Лучший результат только в одном периоде — это "
+        "подгонка под конкретный рынок, а не преимущество.",
     ])
     return text, summary
 
 
 def tg_experiments(summary, meta) -> str:
-    lines = [f"🧪 <b>Эксперименты · {meta['n_symbols']} монет · 2×60д</b>", "A = старые 60д (честная проверка) · B = свежие 60д", ""]
-    for name, a, b in summary:
-        ok = "✅" if a.get("avg_r", -1) > 0 and b.get("avg_r", -1) > 0 else "▫️"
-        lines.append(f"{ok} {name}\n   A: {a.get('avg_r', 0):+.3f}R ×{a.get('n', 0)} · B: {b.get('avg_r', 0):+.3f}R ×{b.get('n', 0)}")
-    lines.append("\n<i>Ср. R на сделку после комиссий. Отчёт: reports/experiments_latest.md</i>")
+    lines = [f"🧪 <b>Эксперименты · {meta['n_symbols']} монет · {meta['days']}д</b>",
+             "Ср. R на сделку по периодам (после комиссий):", ""]
+    for name, ss, allr, ok in summary:
+        per = " · ".join(f"{x.get('avg_r', 0):+.2f}" for x in ss)
+        lines.append(f"{'✅' if ok else '▫️'} {name}\n   {per} (всего {allr.get('n', 0)})")
+    lines.append("\n✅ — в плюсе во всех периодах. Отчёт: reports/experiments_latest.md")
     return "\n".join(lines)
 
 
@@ -240,18 +277,26 @@ def main():
     cfg = load_config()
     days = a.days or (cfg["backtest"].get("experiments_days", 120) if a.experiments else cfg["backtest"]["days"])
     nsym = a.symbols or cfg["backtest"]["symbols"]
-    data, btc, provider = load_synthetic(days, nsym) if a.synthetic else load_live(cfg, days, nsym)
+    data, btc, fng, provider = load_synthetic(cfg, days, nsym) if a.synthetic else load_live(cfg, days, nsym)
     last = max(d[0]["close_time"].iloc[-1] for d in data.values())
     start = last - pd.Timedelta(days=days)
     meta = {"date": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "days": days,
             "n_symbols": len(data), "provider": provider}
-    feats = prepare(data, btc)
+    feats = prepare(data, btc, fng)
     send = not a.no_telegram and not a.synthetic
     REPORTS_DIR.mkdir(exist_ok=True)
 
     if a.experiments:
-        mid = last - pd.Timedelta(days=days / 2)
-        text, summary = experiments(feats, cfg, start, mid, last, meta)
+        text, summary = experiments(feats, cfg, start, last, meta)
+        import json
+
+        from src.config import STATE_DIR
+        (STATE_DIR / "experiments.json").write_text(json.dumps({
+            "date": meta["date"], "days": days, "coins": meta["n_symbols"],
+            "rows": [{"name": n, "ok": ok, "folds": [round(x.get("avg_r", 0), 3) for x in ss],
+                      "n": allr.get("n", 0), "avg_r": round(allr.get("avg_r", 0), 3),
+                      "pf": (None if allr.get("pf") == float("inf") else round(allr.get("pf", 0), 2))}
+                     for n, ss, allr, ok in summary]}, ensure_ascii=False), encoding="utf-8")
         (REPORTS_DIR / "experiments_latest.md").write_text(text, encoding="utf-8")
         print(text)
         if send:

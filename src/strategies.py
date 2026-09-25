@@ -31,7 +31,12 @@ MODULES: dict[str, tuple[str, str]] = {
     "bb_reversion": ("Возврат в полосы Боллинджера", "reversion"),
     "rsi_divergence": ("Дивергенция RSI", "reversion"),
     "vwap_obv": ("VWAP + OBV (поток денег)", "volume"),
+    # --- контртренд: против толпы и манипуляций (используются в отдельной ветке сигналов)
+    "sweep": ("Снятие стопов и возврат (liquidity sweep)", "contrarian"),
+    "crowd": ("Перекос толпы на фьючерсах (L/S ratio)", "contrarian"),
+    "fng": ("Экстремум Fear & Greed", "contrarian"),
 }
+CONTRARIAN = ("sweep", "crowd", "fng")
 
 
 def _sign(x: pd.Series) -> pd.Series:
@@ -69,7 +74,8 @@ def merge_htf(df: pd.DataFrame, htf: pd.DataFrame, prefix: str = "") -> pd.DataF
     return merged
 
 
-def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFrame | None = None) -> pd.DataFrame:
+def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFrame | None = None,
+                   crowd: pd.DataFrame | None = None, fng: pd.DataFrame | None = None) -> pd.DataFrame:
     """df — 15m свечи (time, open, high, low, close, volume, close_time)."""
     f = df.copy()
     c = f["close"]
@@ -90,6 +96,9 @@ def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFra
     f["swing_lo"] = f["low"].rolling(10, min_periods=1).min()
     f["swing_hi"] = f["high"].rolling(10, min_periods=1).max()
     f["atr_pct"] = f["atr"] / c * 100
+    # уровни, за которыми обычно стоят стопы толпы
+    f["liq_lo"] = f["low"].shift(1).rolling(20, min_periods=20).min()
+    f["liq_hi"] = f["high"].shift(1).rolling(20, min_periods=20).max()
 
     if h1 is not None and len(h1):
         f = merge_htf(f, htf_features(h1))
@@ -102,7 +111,9 @@ def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFra
         f["btc_htf_bias"] = 0
     f["htf_bias"] = f["htf_bias"].fillna(0)
     f["btc_htf_bias"] = f["btc_htf_bias"].fillna(0)
-    return f
+    from .crowd import attach
+
+    return attach(f, crowd, fng)
 
 
 # ---------------------------------------------------------------- модули
@@ -243,6 +254,36 @@ def v_vwap_obv(f):
     return (_sign(f.close - f.vwap) + _sign(f.obv - f.obv_ema)) / 2.0
 
 
+def v_sweep(f):
+    """Охота за стопами: цена прокалывает 20-барный экстремум и закрывается обратно
+    с длинной тенью на повышенном объёме → торгуем против прокола."""
+    rng = (f.high - f.low).replace(0, np.nan)
+    lower_wick = (np.minimum(f.open, f.close) - f.low) / rng
+    upper_wick = (f.high - np.maximum(f.open, f.close)) / rng
+    vol = f.vol_z > 0.5
+    bull = (f.low < f.liq_lo) & (f.close > f.liq_lo) & (lower_wick >= 0.5) & vol
+    bear = (f.high > f.liq_hi) & (f.close < f.liq_hi) & (upper_wick >= 0.5) & vol
+    return pd.Series(np.select([bull, bear], [1.0, -1.0], 0.0), index=f.index)
+
+
+def v_crowd(f):
+    """Против розничной толпы: сильный перекос лонгов по числу счетов → шорт-бias, и наоборот.
+    Если топ-трейдеры стоят вместе с толпой — сигнал ослабляем."""
+    z = f.get("ls_acc_z", pd.Series(np.nan, index=f.index))
+    top = f.get("ls_top_z", pd.Series(np.nan, index=f.index))
+    d = -np.sign(z)
+    strength = np.where(z.abs() >= 2.0, 1.0, np.where(z.abs() >= 1.5, 0.6, 0.0))
+    with_crowd = (np.sign(top) == np.sign(z)) & (top.abs() >= 1.0)
+    strength = np.where(with_crowd, strength * 0.5, strength)
+    return pd.Series(d * strength, index=f.index).fillna(0.0)
+
+
+def v_fng(f):
+    """Экстремумы Fear & Greed: «покупай страх, продавай жадность»."""
+    x = f.get("fng", pd.Series(np.nan, index=f.index))
+    return pd.Series(np.select([x <= 20, x <= 30, x >= 80, x >= 70], [1.0, 0.5, -1.0, -0.5], 0.0), index=f.index)
+
+
 VOTERS = {
     "ema_trend": v_ema_trend,
     "supertrend": v_supertrend,
@@ -255,6 +296,9 @@ VOTERS = {
     "bb_reversion": v_bb_reversion,
     "rsi_divergence": v_rsi_divergence,
     "vwap_obv": v_vwap_obv,
+    "sweep": v_sweep,
+    "crowd": v_crowd,
+    "fng": v_fng,
 }
 
 

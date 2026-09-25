@@ -1,36 +1,38 @@
-# ===================== McQ Signals — настройки =====================
+# ===================== McQ Signals v3 — настройки =====================
 # Меняй параметры здесь, код трогать не нужно.
 
 universe:
-  min_market_cap_usd: 100000000     # капитализация от $100M
-  min_quote_volume_24h_usd: 15000000 # ликвидность на бирже за 24ч (для интрадея критично)
+  min_market_cap_usd: 100000000      # капитализация от $100M
+  min_quote_volume_24h_usd: 15000000 # ликвидность на бирже за 24ч
   max_assets: 60                     # сколько самых ликвидных монет сканировать
   quote: USDT
   refresh_hours: 12                  # как часто обновлять список монет (CoinGecko)
   extra_exclude: []                  # свои исключения, например: [PEPE, WIF]
 
 timeframes:
-  entry: 15m       # таймфрейм входа
-  confirm: 1h      # старший ТФ — фильтр тренда
-  bars_entry: 600  # сколько 15m свечей тянуть (нужно >= 250 для EMA200)
+  entry: 1h        # таймфрейм входа (v1/v2 были на 15m — комиссии съедали преимущество)
+  confirm: 4h      # старший ТФ — фильтр тренда
+  track: 15m       # по каким свечам сопровождать открытые сигналы (быстрее уведомления)
+  bars_entry: 600  # нужно >= 260 для EMA200
   bars_confirm: 400
 
 signals:
-  min_score: 70            # порог силы сигнала 0..100 (выше = меньше, но качественнее)
-  min_agree: 5             # минимум модулей, голосующих «за»
-  require_htf: true        # учитывать тренд 1H
-  htf_mode: strict         # strict — тренд 1H должен совпадать; loose — просто не против
-  btc_filter: true         # бонус/штраф альтам за совпадение с трендом BTC 1H
-  btc_mode: block          # block — альты против тренда BTC не торгуем; penalty — только штраф
+  min_score: 70            # порог силы трендового сигнала 0..100
+  min_agree: 5             # минимум трендовых модулей «за»
+  require_htf: true
+  htf_mode: strict         # strict — тренд 4H должен совпадать; loose — просто не против
+  btc_filter: true
+  btc_mode: block          # block — альты против тренда BTC 4H не торгуем; penalty — только штраф
   sides: both              # both | long_only | short_only
-  strict_shorts: true      # шорт только когда 1H монеты И 1H BTC медвежьи
-  cooldown_minutes: 240    # не повторять сигнал по монете чаще
+  strict_shorts: true      # трендовый шорт только когда 4H монеты И 4H BTC медвежьи
+  cooldown_minutes: 480
   max_signals_per_run: 5
-  max_open_signals: 12     # лимит одновременно открытых сигналов
-  atr_pct_min: 0.15        # отсекаем «мёртвые» монеты
-  atr_pct_max: 4.0         # и безумную волатильность
-  lookback_bars_on_run: 3  # сколько закрытых свечей проверять (на случай задержки Actions)
-  modules:                 # можно выключить любой модуль, удалив его из списка
+  max_open_signals: 20
+  atr_pct_min: 0.2
+  atr_pct_max: 8.0
+  lookback_bars_on_run: 2
+  max_signal_age_minutes: 75  # сигнал со свечи старше — не отправляем (задержки Actions)
+  modules:                 # трендовый консенсус (контртрендовые модули — в разделе contrarian)
     - ema_trend
     - supertrend
     - pullback
@@ -43,57 +45,88 @@ signals:
     - rsi_divergence
     - vwap_obv
 
-risk:
-  sl_min_atr: 1.0     # стоп не ближе 1 ATR
-  sl_max_atr: 2.5     # и не дальше 2.5 ATR
-  sl_swing_buffer_atr: 0.25
-  sl_max_pct: 4.0     # и не дальше 4% от входа
-  sl_min_pct: 0.0     # и не ближе X% (0 = выкл.)
-  max_cost_r: 0.2     # пропускать сделку, если комиссии туда-обратно > 0.2R (узкий стоп). 0 = выкл.
-  tp1_r: 1.5          # TP1 = 1.5R
-  tp2_r: 3.0          # TP2 = 3R
-  tp1_close_frac: 0.5 # на TP1 закрываем 50%, стоп в безубыток
-  ttl_hours: 24       # сигнал закрывается по времени
-  risk_per_trade_pct: 1.0  # для подсказки размера позиции в сообщении
+# Против толпы и манипуляций
+contrarian:
+  enabled: true
+  trigger: sweep           # обязательный триггер: снятие стопов за 20-барным экстремумом и возврат
+  confirm: [crowd, fng]    # подтверждение: перекос толпы на фьючерсах и/или экстремум Fear & Greed
+  min_confirm: 1
+  ignore_htf: true         # контртренд по определению может идти против старшего тренда
+  base_conf: 60
+  crowd_filter: true       # трендовые сигналы: не входить туда, где толпа уже перегружена
+  crowd_filter_z: 2.0
+  fng_filter: false        # трендовые: не покупать при F&G ≥ 80 и не шортить при ≤ 20
+  fng_greed: 80
+  fng_fear: 20
 
-costs:                 # издержки на ОДНУ сторону сделки
-  fee_pct: 0.075       # спот Binance taker со скидкой BNB. Фьючерсы USDT-M taker ≈ 0.045–0.05
+crowd:
+  days: 20                 # сколько дней Binance metrics держать для z-оценки
+  z_window_days: 14
+  publish_delay_hours: 8   # файл за день D считаем доступным с D+1 08:00 UTC
+
+# Новостной фон из бота marketnews999 (только в боевом режиме: на истории не проверить)
+news:
+  enabled: true
+  url: https://alexmcq999-dev.github.io/marketnews999/data/app.json
+  calendar_blackout_minutes: 45  # не давать новые сигналы за 45 мин до и после High-impact макро-события
+  show_in_signal: true           # показывать новостной фон в сообщении
+  against_news_filter: false     # не открывать сделку против свежего (≤ 12ч) официального 🏛 события
+
+risk:
+  sl_min_atr: 1.0
+  sl_max_atr: 2.5
+  sl_swing_buffer_atr: 0.25
+  sl_max_pct: 6.0
+  sl_min_pct: 0.0
+  max_cost_r: 0.2          # пропускать сделку, если комиссии туда-обратно > 0.2R
+  tp1_r: 1.5               # TP1 = 1.5R, закрываем часть и стоп в б/у
+  tp1_close_frac: 0.5
+  exit_mode: trail         # trail — остаток ведём трейлинг-стопом; fixed — остаток на TP2
+  trail_atr: 3.0           # трейлинг = лучшая цена − 3 ATR
+  tp2_r: 3.0               # используется только при exit_mode: fixed
+  ttl_hours: 168           # максимум 7 дней в сделке
+  risk_per_trade_pct: 1.0
+
+costs:                     # издержки на ОДНУ сторону сделки
+  fee_pct: 0.075           # спот Binance taker. Фьючерсы USDT-M taker ≈ 0.045–0.05
   slippage_pct: 0.03
 
 backtest:
-  days: 60
-  symbols: 25          # топ-N монет по ликвидности
-  experiments_days: 120  # для --experiments: 2 периода по 60 дней
-
-# Варианты для `python backtest.py --experiments` — сравниваются на ОДНИХ данных.
-# Каждый вариант = отличия от config.yaml. «v1» воспроизводит первую версию бота.
-experiments:
-  - name: "v1 (первая версия)"
-    set:
-      signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false, sides: both}
-      risk: {max_cost_r: 0, sl_min_pct: 0}
-  - name: "v1 + фильтр издержек ≤0.2R"
-    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0.2, sl_min_pct: 0}}
-  - name: "v1 + мин. стоп 1%"
-    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 1.0}}
-  - name: "v1 + строгий тренд 1H и BTC"
-    set: {signals: {min_score: 66, htf_mode: strict, btc_mode: block, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 0}}
-  - name: "v1 + строгие шорты"
-    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: true}, risk: {max_cost_r: 0, sl_min_pct: 0}}
-  - name: "v1 + сила ≥70"
-    set: {signals: {min_score: 70, htf_mode: loose, btc_mode: penalty, strict_shorts: false}, risk: {max_cost_r: 0, sl_min_pct: 0}}
-  - name: "v1 только лонги (справочно)"
-    set: {signals: {min_score: 66, htf_mode: loose, btc_mode: penalty, strict_shorts: false, sides: long_only}, risk: {max_cost_r: 0, sl_min_pct: 0}}
-  - name: "v2 (текущий config)"
-    set: {}
-  - name: "v2 + мин. стоп 1% вместо фильтра"
-    set: {risk: {max_cost_r: 0, sl_min_pct: 1.0}}
-  - name: "v2 без модуля «откат к EMA»"
-    set: {signals: {modules: [ema_trend, supertrend, macd, rsi_regime, stoch_rsi, donchian, squeeze, bb_reversion, rsi_divergence, vwap_obv]}}
-  - name: "v2 с комиссиями фьючерсов"
-    set: {costs: {fee_pct: 0.045, slippage_pct: 0.03}}
+  days: 180
+  symbols: 25
+  experiments_days: 360    # --experiments: 3 периода по 120 дней
+  folds: 3
 
 telegram:
-  allow_public_subscribe: true  # false — сигналы только в TELEGRAM_CHAT_ID (приватный бот)
-  daily_report_hour_utc: 6      # ежедневный отчёт в 09:00 МСК
-  timezone: Europe/Moscow       # время в сообщениях
+  allow_public_subscribe: true
+  daily_report_hour_utc: 6       # 09:00 МСК
+  timezone: Europe/Moscow
+  test_mode: true                # 🧪 пометка «ТЕСТ» на сигналах, пока стратегия не прошла проверку
+
+# Варианты для `python backtest.py --experiments` — все на одних данных, 3 периода.
+# Рабочий вариант — в плюсе во ВСЕХ периодах.
+experiments:
+  - name: "v3 тренд + контртренд (config)"
+    set: {}
+  - name: "v3 только тренд"
+    set: {contrarian: {enabled: false, crowd_filter: false}}
+  - name: "v3 тренд + фильтр толпы"
+    set: {contrarian: {enabled: false, crowd_filter: true}}
+  - name: "v3 только контртренд"
+    set: {contrarian: {only: true}}
+  - name: "контртренд: снятие стопов без подтверждений"
+    set: {contrarian: {only: true, min_confirm: 0}}
+  - name: "v3 фиксированный TP2 вместо трейлинга"
+    set: {risk: {exit_mode: fixed, ttl_hours: 72}}
+  - name: "v3 трейлинг 2 ATR"
+    set: {risk: {trail_atr: 2.0}}
+  - name: "v3 трейлинг 4 ATR"
+    set: {risk: {trail_atr: 4.0}}
+  - name: "v3 мягкий фильтр тренда"
+    set: {signals: {htf_mode: loose, btc_mode: penalty, strict_shorts: false}}
+  - name: "v3 + фильтр Fear & Greed"
+    set: {contrarian: {fng_filter: true}}
+  - name: "v3 комиссии фьючерсов"
+    set: {costs: {fee_pct: 0.045}}
+  - name: "v3 только лонги (справочно)"
+    set: {signals: {sides: long_only}}

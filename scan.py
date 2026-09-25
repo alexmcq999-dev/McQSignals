@@ -12,8 +12,10 @@ from datetime import timedelta
 
 import pandas as pd
 
+from src import crowd as cw
+from src import news as nw
 from src import store
-from src.config import load_config
+from src.config import TF_MINUTES, load_config
 from src.data import build_universe, fetch_many, pick_provider, split_closed
 from src.engine import Trade, analyze, update_trade
 from src.engine import make_trade, trade_ok
@@ -23,9 +25,9 @@ from src.telegram import TG, event_text, signal_text, stats_text, fp
 log = logging.getLogger("scan")
 
 HELP = (
-    "🤖 <b>McQ Signals</b> — интрадей-сигналы (15m + фильтр 1H) по ликвидным монетам с капой ≥ $100M.\n\n"
-    "Каждый сигнал — консенсус 11 классических стратегий (тренд, импульс, пробой, "
-    "возврат к среднему, объём) с учётом режима рынка, тренда 1H и BTC.\n\n"
+    "🤖 <b>McQ Signals</b> — сигналы ({etf} + фильтр {ctf}) по ликвидным монетам с капой ≥ $100M.\n\n"
+    "Каждый сигнал — консенсус классических стратегий (тренд, импульс, пробой, возврат к среднему, "
+    "объём, позиционирование толпы) с учётом режима рынка, тренда {ctf} и BTC.\n\n"
     "Команды:\n"
     "/stats — результаты сигналов (7д / 30д / всё время)\n"
     "/open — открытые сигналы\n"
@@ -34,6 +36,14 @@ HELP = (
     "⚠️ Бот работает через GitHub Actions: ответ на команду приходит при следующем запуске (до ~15 мин).\n"
     "<i>Не финансовый совет. Всегда используй стоп-лосс.</i>"
 )
+
+
+def help_text(cfg) -> str:
+    tf = cfg["timeframes"]
+    text = HELP.format(etf=tf["entry"].upper(), ctf=tf["confirm"].upper())
+    if cfg.get("telegram", {}).get("test_mode"):
+        text = "🧪 <b>ТЕСТОВЫЙ РЕЖИМ</b>: сигналы для проверки стратегии, не для торговли.\n\n" + text
+    return text
 
 
 def _closed_since(hist: dict, days: int | None):
@@ -57,7 +67,7 @@ def handle_commands(tg: TG, cfg, subs, sig, hist):
             if allow or chat in tg.fixed:
                 if chat not in subs["chats"] and chat not in tg.fixed:
                     subs["chats"].append(chat)
-                tg.send(chat, "✅ Подписка активна. Сигналы будут приходить сюда.\n\n" + HELP)
+                tg.send(chat, "✅ Подписка активна. Сигналы будут приходить сюда.\n\n" + help_text(cfg))
             else:
                 tg.send(chat, "Бот приватный.")
             continue
@@ -87,7 +97,47 @@ def handle_commands(tg: TG, cfg, subs, sig, hist):
             assets = json.loads(u_.read_text())["assets"] if u_.exists() else []
             tg.send(chat, f"🪙 <b>Сканируется {len(assets)} монет</b>\n" + ", ".join(a["base"] for a in assets))
         elif cmd.startswith("/"):
-            tg.send(chat, HELP)
+            tg.send(chat, help_text(cfg))
+
+
+def _pub(t: Trade, price: float | None = None) -> dict:
+    d = {k: getattr(t, k) for k in ("id", "symbol", "side", "kind", "entry", "sl", "tp1", "risk", "opened", "conf",
+                                    "regime", "reasons", "status", "exit_reason", "r_gross", "closed")}
+    d["side"] = "LONG" if t.side > 0 else "SHORT"
+    d["reasons"] = [MODULES[m][0] for m in t.reasons if m in MODULES]
+    if price is not None and t.status != "closed":
+        frac = 0.5 if t.status == "tp1" else 0.0
+        d["price"] = price
+        d["r_open"] = round(t.r_gross * (1 if frac else 0) + (1 - frac) * t.side * (price - t.entry) / t.risk, 2)
+    return d
+
+
+def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev):
+    """state/app_signals.json — данные для вкладки «Сигналы» в мини-приложении marketnews999."""
+    import json
+
+    from src.stats import summarize
+
+    def st(days):
+        s_ = summarize(_closed_since(hist, days), "r_gross")
+        return {k: (None if isinstance(v, float) and v == float("inf") else v) for k, v in s_.items()}
+
+    exp = store.STATE_DIR / "experiments.json"
+    data = {
+        "updated": now.isoformat(),
+        "test_mode": bool(cfg.get("telegram", {}).get("test_mode")),
+        "provider": provider,
+        "coins": n_coins,
+        "timeframes": {"entry": cfg["timeframes"]["entry"], "confirm": cfg["timeframes"]["confirm"]},
+        "exit": {"mode": cfg["risk"].get("exit_mode"), "tp1_r": cfg["risk"]["tp1_r"],
+                 "trail_atr": cfg["risk"].get("trail_atr")},
+        "blackout": ({"title": blackout_ev.get("title"), "ts": blackout_ev["t"].isoformat()} if blackout_ev else None),
+        "open": [_pub(t, prices.get(t.symbol)) for t in still_open],
+        "closed": [_pub(Trade.from_dict(d)) for d in hist["closed"][-50:]][::-1],
+        "stats": {"d7": st(7), "d30": st(30), "all": st(None)},
+        "backtest": json.loads(exp.read_text()) if exp.exists() else None,
+    }
+    (store.STATE_DIR / "app_signals.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
 
 
 def main():
@@ -133,14 +183,18 @@ def main():
     bases = [a["base"] for a in universe]
     open_trades = [Trade.from_dict(d) for d in sig["open"]]
     tf = cfg["timeframes"]
-    k15 = fetch_many(provider, list(dict.fromkeys(bases + [t.symbol for t in open_trades])), "15m", tf["bars_entry"])
-    k1h = fetch_many(provider, list(dict.fromkeys(bases + ["BTC"])), "1h", tf["bars_confirm"])
-    log.info("Свечи: 15m=%d, 1h=%d монет", len(k15), len(k1h))
+    etf, ctf, ttf = tf["entry"], tf["confirm"], tf.get("track", tf["entry"])
+    kE = fetch_many(provider, bases, etf, tf["bars_entry"])
+    kC = fetch_many(provider, list(dict.fromkeys(bases + ["BTC"])), ctf, tf["bars_confirm"])
+    track_syms = [t.symbol for t in open_trades]
+    n_track = min(1500, int(cfg["risk"]["ttl_hours"] * 60 / TF_MINUTES[ttf]) + 50)
+    kT = fetch_many(provider, track_syms, ttf, n_track) if track_syms else {}
+    log.info("Свечи: %s=%d, %s=%d монет, сопровождение %s=%d", etf, len(kE), ctf, len(kC), ttf, len(kT))
 
     # ---------------------------------------------- 1. сопровождение открытых сигналов
     still_open = []
     for t in open_trades:
-        df = k15.get(t.symbol)
+        df = kT.get(t.symbol)
         if df is None:
             still_open.append(t)
             continue
@@ -163,23 +217,37 @@ def main():
 
     # ---------------------------------------------- 2. поиск новых сигналов
     sc = cfg["signals"]
-    btc_h1 = split_closed(k1h["BTC"], now)[0] if "BTC" in k1h else None
+    cr = cfg.get("contrarian", {})
+    crowd_tbls, fng = {}, None
+    if cr.get("enabled") or cr.get("crowd_filter") or cr.get("fng_filter"):
+        try:
+            cache = cw.fetch_metrics(bases, cw.recent_days(now, cfg.get("crowd", {}).get("days", 20)))
+            crowd_tbls = {b: cw.crowd_table(cache, b, cfg) for b in bases}
+            fng = cw.fetch_fng()
+        except Exception as e:  # noqa: BLE001
+            log.warning("Данные толпы: %s", e)
+    news_data = nw.load(cfg)
+    bo = nw.blackout(news_data, now, cfg)
+    if bo:
+        log.info("Блэкаут: %s (%s) — новые сигналы не отправляем", bo.get("title"), bo["t"])
+    btc_h1 = split_closed(kC["BTC"], now)[0] if "BTC" in kC else None
+    max_age = pd.Timedelta(minutes=sc.get("max_signal_age_minutes", 75))
     open_syms = {t.symbol for t in still_open}
     candidates = []
     for b in bases:
-        df, h = k15.get(b), k1h.get(b)
+        df, h = kE.get(b), kC.get(b)
         if df is None or h is None or len(df) < 260:
             continue
         closed, last_price = split_closed(df, now)
         h_closed, _ = split_closed(h, now)
-        out = analyze(closed, h_closed, btc_h1, cfg, is_btc=(b == "BTC"))
+        out = analyze(closed, h_closed, btc_h1, cfg, is_btc=(b == "BTC"), crowd=crowd_tbls.get(b), fng=fng)
         prev = sig["last_bar"].get(b)
         last_seen = pd.Timestamp(prev) if prev else out["close_time"].iloc[-sc["lookback_bars_on_run"] - 1]
         tail = out.tail(sc["lookback_bars_on_run"])
         fresh = tail[(tail["signal"] != 0) & (tail["close_time"] > last_seen)
-                     & (now - tail["close_time"] <= pd.Timedelta(minutes=50))]
+                     & (now - tail["close_time"] <= max_age)]
         sig["last_bar"][b] = out["close_time"].iloc[-1].isoformat()
-        if fresh.empty or b in open_syms:
+        if fresh.empty or b in open_syms or bo:
             continue
         cd = sig["cooldown"].get(b)
         if cd and now < pd.Timestamp(cd):
@@ -193,15 +261,22 @@ def main():
         if not -0.5 < drift < 0.5:
             log.info("%s: цена уже ушла (%.2fR) — пропуск", b, drift)
             continue
-        candidates.append((float(row["conf"]), t, row))
+        nctx = nw.context(news_data, now, b)
+        if cfg.get("news", {}).get("against_news_filter"):
+            why = nw.against_news(nctx, t.side)
+            if why:
+                log.info("%s: против свежей официальной новости «%s» — пропуск", b, why)
+                continue
+        candidates.append((float(row["conf"]), t, row, nctx))
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     slots = max(0, min(sc["max_signals_per_run"], sc["max_open_signals"] - len(still_open)))
-    for _, t, row in candidates[:slots]:
+    for _, t, row, nctx in candidates[:slots]:
         sig["seq"] += 1
         t.id = f"{sig['seq']:04d}"
         t.last_checked = t.opened
-        text = signal_text(t, row, provider.name, cfg, len(sc.get("modules", MODULES)))
+        n_mod = len(cr.get("confirm", [])) + 1 if t.kind == "contra" else len(sc.get("modules", MODULES))
+        text = signal_text(t, row, provider.name, cfg, n_mod, nctx)
         t.msg_ids = tg.broadcast(chats(), text, on_blocked=drop_chat)
         still_open.append(t)
         sig["cooldown"][t.symbol] = (now + timedelta(minutes=sc["cooldown_minutes"])).isoformat()
@@ -219,6 +294,14 @@ def main():
     sig["open"] = [t.to_dict() for t in still_open]
     sig["cooldown"] = {k: v for k, v in sig["cooldown"].items() if pd.Timestamp(v) > now}
     store.save("signals", sig)
+    try:
+        prices = {}
+        for src_ in (kE, kT):
+            for b_, df_ in src_.items():
+                prices[b_] = float(df_["close"].iloc[-1])
+        export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo)
+    except Exception as e:  # noqa: BLE001
+        log.warning("Экспорт для мини-приложения: %s", e)
     store.save("history", hist)
     store.save("subscribers", subs)
 
