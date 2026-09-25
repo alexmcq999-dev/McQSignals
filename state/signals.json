@@ -23,14 +23,14 @@
    "kind": "trend",
    "cost_r": 0.0553,
    "atr": 0.0013933657623226338,
-   "peak": 0.09517,
+   "peak": 0.09553,
    "status": "open",
    "exit_reason": "",
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-09-25T22:29:59.999000+00:00",
-   "bars_held": 6,
+   "last_checked": "2026-09-25T22:44:59.999000+00:00",
+   "bars_held": 7,
    "id": "0003",
    "msg_ids": {
     "6542171685": 15
