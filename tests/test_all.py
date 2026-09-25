@@ -259,3 +259,10 @@ def test_experiments_synthetic(tmp_path, monkeypatch):
     backtest.main()
     txt = (tmp_path / "experiments_latest.md").read_text()
     assert txt.count("\n| ▫️") + txt.count("\n| ✅") >= 10 and "П3" in txt
+
+
+def test_default_config_is_v31(cfg):
+    """Боевой конфиг: контртрендовая ветка выключена, фильтр толпы включён."""
+    assert cfg["contrarian"]["enabled"] is False
+    assert cfg["contrarian"]["crowd_filter"] is True
+    assert cfg["timeframes"]["entry"] == "1h" and cfg["risk"]["exit_mode"] == "trail"
