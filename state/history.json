@@ -1,3 +1,35 @@
 {
- "closed": []
+ "closed": [
+  {
+   "symbol": "XPL",
+   "side": 1,
+   "entry": 0.12179,
+   "sl": 0.11691839999999999,
+   "tp1": 0.1290974,
+   "tp2": 0.1364048,
+   "risk": 0.0048716,
+   "opened": "2026-09-25T08:29:59.999000+00:00",
+   "conf": 76.1,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "stoch_rsi",
+    "donchian",
+    "vwap_obv"
+   ],
+   "cost_r": 0.0,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-09-25T09:29:59.999000+00:00",
+   "last_checked": "2026-09-25T09:29:59.999000+00:00",
+   "bars_held": 4,
+   "id": "0001",
+   "msg_ids": {}
+  }
+ ]
 }
