@@ -1,0 +1,62 @@
+# ===================== McQ Signals — настройки =====================
+# Меняй параметры здесь, код трогать не нужно.
+
+universe:
+  min_market_cap_usd: 100000000     # капитализация от $100M
+  min_quote_volume_24h_usd: 15000000 # ликвидность на бирже за 24ч (для интрадея критично)
+  max_assets: 60                     # сколько самых ликвидных монет сканировать
+  quote: USDT
+  refresh_hours: 12                  # как часто обновлять список монет (CoinGecko)
+  extra_exclude: []                  # свои исключения, например: [PEPE, WIF]
+
+timeframes:
+  entry: 15m       # таймфрейм входа
+  confirm: 1h      # старший ТФ — фильтр тренда
+  bars_entry: 600  # сколько 15m свечей тянуть (нужно >= 250 для EMA200)
+  bars_confirm: 400
+
+signals:
+  min_score: 66            # порог силы сигнала 0..100 (выше = меньше, но качественнее)
+  min_agree: 5             # минимум модулей, голосующих «за»
+  require_htf: true        # не торговать против тренда 1H
+  btc_filter: true         # штраф альтам за сигнал против тренда BTC 1H
+  cooldown_minutes: 240    # не повторять сигнал по монете чаще
+  max_signals_per_run: 5
+  max_open_signals: 12     # лимит одновременно открытых сигналов
+  atr_pct_min: 0.15        # отсекаем «мёртвые» монеты
+  atr_pct_max: 4.0         # и безумную волатильность
+  lookback_bars_on_run: 3  # сколько закрытых свечей проверять (на случай задержки Actions)
+  modules:                 # можно выключить любой модуль, удалив его из списка
+    - ema_trend
+    - supertrend
+    - pullback
+    - macd
+    - rsi_regime
+    - stoch_rsi
+    - donchian
+    - squeeze
+    - bb_reversion
+    - rsi_divergence
+    - vwap_obv
+
+risk:
+  sl_min_atr: 1.0     # стоп не ближе 1 ATR
+  sl_max_atr: 2.5     # и не дальше 2.5 ATR
+  sl_swing_buffer_atr: 0.25
+  sl_max_pct: 4.0     # и не дальше 4% от входа
+  tp1_r: 1.5          # TP1 = 1.5R
+  tp2_r: 3.0          # TP2 = 3R
+  tp1_close_frac: 0.5 # на TP1 закрываем 50%, стоп в безубыток
+  ttl_hours: 24       # сигнал закрывается по времени
+  risk_per_trade_pct: 1.0  # для подсказки размера позиции в сообщении
+
+backtest:
+  days: 60
+  symbols: 25          # топ-N монет по ликвидности
+  fee_pct: 0.075       # комиссия за сторону, % (taker Binance со скидкой BNB)
+  slippage_pct: 0.03   # проскальзывание за сторону, %
+
+telegram:
+  allow_public_subscribe: true  # false — сигналы только в TELEGRAM_CHAT_ID (приватный бот)
+  daily_report_hour_utc: 6      # ежедневный отчёт в 09:00 МСК
+  timezone: Europe/Moscow       # время в сообщениях
