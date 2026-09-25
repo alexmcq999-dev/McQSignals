@@ -106,27 +106,27 @@ telegram:
 # Варианты для `python backtest.py --experiments` — все на одних данных, 3 периода.
 # Рабочий вариант — в плюсе во ВСЕХ периодах.
 experiments:
-  - name: "v3 тренд + контртренд (config)"
+  - name: "v3.1 тренд + фильтр толпы (config)"
     set: {}
-  - name: "v3 только тренд"
-    set: {contrarian: {enabled: false, crowd_filter: false}}
-  - name: "v3 тренд + фильтр толпы"
-    set: {contrarian: {enabled: false, crowd_filter: true}}
-  - name: "v3 только контртренд"
-    set: {contrarian: {only: true}}
-  - name: "контртренд: снятие стопов без подтверждений"
-    set: {contrarian: {only: true, min_confirm: 0}}
-  - name: "v3 фиксированный TP2 вместо трейлинга"
-    set: {risk: {exit_mode: fixed, ttl_hours: 72}}
-  - name: "v3 трейлинг 2 ATR"
-    set: {risk: {trail_atr: 2.0}}
-  - name: "v3 трейлинг 4 ATR"
-    set: {risk: {trail_atr: 4.0}}
-  - name: "v3 мягкий фильтр тренда"
-    set: {signals: {htf_mode: loose, btc_mode: penalty, strict_shorts: false}}
-  - name: "v3 + фильтр Fear & Greed"
-    set: {contrarian: {fng_filter: true}}
-  - name: "v3 комиссии фьючерсов"
+  - name: "v3.1 + комиссии фьючерсов"
     set: {costs: {fee_pct: 0.045}}
-  - name: "v3 только лонги (справочно)"
+  - name: "без фильтра толпы"
+    set: {contrarian: {crowd_filter: false}}
+  - name: "фильтр толпы строже (z ≥ 1.5)"
+    set: {contrarian: {crowd_filter_z: 1.5}}
+  - name: "фильтр толпы мягче (z ≥ 2.5)"
+    set: {contrarian: {crowd_filter_z: 2.5}}
+  - name: "+ фильтр Fear & Greed"
+    set: {contrarian: {fng_filter: true}}
+  - name: "мягкий фильтр тренда 4H/BTC"
+    set: {signals: {htf_mode: loose, btc_mode: penalty, strict_shorts: false}}
+  - name: "сила ≥ 66"
+    set: {signals: {min_score: 66}}
+  - name: "сила ≥ 75"
+    set: {signals: {min_score: 75}}
+  - name: "фиксированный TP2 вместо трейлинга"
+    set: {risk: {exit_mode: fixed, ttl_hours: 72}}
+  - name: "трейлинг 4 ATR"
+    set: {risk: {trail_atr: 4.0}}
+  - name: "только лонги (справочно)"
     set: {signals: {sides: long_only}}

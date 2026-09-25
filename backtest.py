@@ -166,7 +166,8 @@ def load_live(cfg, days, n_symbols):
     now = pd.Timestamp.now(tz="UTC")
 
     crowd_tbls, fng = {}, None
-    if cfg.get("contrarian", {}).get("enabled") or any(
+    cr = cfg.get("contrarian", {})
+    if cr.get("enabled") or cr.get("crowd_filter") or cr.get("fng_filter") or any(
             (e.get("set") or {}).get("contrarian") for e in cfg.get("experiments", [])):
         ndays = days + cfg.get("crowd", {}).get("z_window_days", 14) + 3
         cache = cw.fetch_metrics(bases, cw.recent_days(now, ndays), ROOT / ".cache" / "crowd" / "metrics.json")
