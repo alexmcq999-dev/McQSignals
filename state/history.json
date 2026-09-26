@@ -64,6 +64,116 @@
    "bars_held": 5,
    "id": "0002",
    "msg_ids": {}
+  },
+  {
+   "symbol": "HBAR",
+   "side": 1,
+   "entry": 0.09477,
+   "sl": 0.09220165855941934,
+   "tp1": 0.09862251216087098,
+   "tp2": 0.10247502432174196,
+   "risk": 0.002568341440580657,
+   "opened": "2026-09-25T20:59:59.999000+00:00",
+   "conf": 73.1,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "pullback",
+    "macd",
+    "rsi_regime",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "cost_r": 0.0553,
+   "atr": 0.0013933657623226338,
+   "peak": 0.09599,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-09-26T20:44:59.999000+00:00",
+   "last_checked": "2026-09-26T20:44:59.999000+00:00",
+   "bars_held": 95,
+   "id": "0003",
+   "msg_ids": {
+    "6542171685": 15
+   }
+  },
+  {
+   "symbol": "XPL",
+   "side": 1,
+   "entry": 0.121,
+   "sl": 0.11374,
+   "tp1": 0.13189,
+   "tp2": 0.14278,
+   "risk": 0.00726,
+   "opened": "2026-09-26T10:59:59.999000+00:00",
+   "conf": 73.1,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "cost_r": 0.025,
+   "atr": 0.004102612066659258,
+   "peak": 0.12211,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-09-26T20:14:59.999000+00:00",
+   "last_checked": "2026-09-26T20:14:59.999000+00:00",
+   "bars_held": 37,
+   "id": "0005",
+   "msg_ids": {
+    "6542171685": 27,
+    "278119034": 28
+   }
+  },
+  {
+   "symbol": "AERO",
+   "side": 1,
+   "entry": 0.9236,
+   "sl": 0.868184,
+   "tp1": 1.006724,
+   "tp2": 1.089848,
+   "risk": 0.055416,
+   "opened": "2026-09-26T11:59:59.999000+00:00",
+   "conf": 71.8,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "stoch_rsi",
+    "donchian",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "cost_r": 0.025,
+   "atr": 0.025818041077831467,
+   "peak": 0.932,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-09-26T20:29:59.999000+00:00",
+   "last_checked": "2026-09-26T20:29:59.999000+00:00",
+   "bars_held": 34,
+   "id": "0006",
+   "msg_ids": {
+    "6542171685": 29,
+    "278119034": 30
+   }
   }
  ]
 }
