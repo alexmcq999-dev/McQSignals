@@ -20,7 +20,106 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
+        with:name: Scan signals
+
+# Бот сканирует рынок каждые 15 минут внутри одного долгого запуска (до ~5 ч 45 мин),
+# а в конце сам запускает следующий запуск (workflow_dispatch через GITHUB_TOKEN).
+# Так скан не зависит от расписания GitHub, которое на бесплатных раннерах часто
+# откладывает или пропускает запуски. Расписание ниже нужно только как резерв:
+# если цепочка оборвётся, первый же запуск по cron её восстановит.
+
+on:
+  schedule:
+    - cron: "1 * * * *"   # резервный перезапуск цепочки (раз в час, если GitHub успеет)
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # коммит state/
+  actions: write    # запуск следующего звена цепочки
+
+concurrency:
+  group: scan-loop          # одновременно работает только один цикл скана
+  cancel-in-progress: false # новый запуск ждёт окончания текущего (лишние ожидающие GitHub отменяет сам)
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 355    # лимит GitHub — 360 минут на job
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Scan loop (every 15 min)
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          COINGECKO_API_KEY: ${{ secrets.COINGECKO_API_KEY }}
+          DATA_PROVIDER: ${{ vars.DATA_PROVIDER }}
+          LOOP_MINUTES: "340"   # сколько минут крутить цикл, потом передать эстафету
+        run: |
+          git config user.name  "mcq-bot"
+          git config user.email "mcq-bot@users.noreply.github.com"
+
+          sync() {   # подтянуть свежий main (отчёты бэктеста, правки кода) перед сканом
+            for i in 1 2 3; do
+              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && return 0
+              git rebase --abort 2>/dev/null || true
+              sleep 5
+            done
+            echo "::warning title=Git::не удалось подтянуть main, сканирую на текущей версии"
+          }
+
+          save_state() {   # то же, что раньше делал шаг Save state
+            git add state/
+            if git diff --staged --quiet; then echo "state: без изменений"; return 0; fi
+            git commit -q -m "state: $(date -u +%Y-%m-%dT%H:%MZ) [skip ci]"
+            for i in 1 2 3; do
+              git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" && git push && return 0
+              git rebase --abort 2>/dev/null || true
+              sleep 5
+            done
+            echo "::error title=Git::не удалось отправить state (попробую на следующем скане)"
+            return 1
+          }
+
+          END=$(( $(date +%s) + LOOP_MINUTES * 60 ))
+          FAILS=0
+          RUNS=0
+          while :; do
+            RUNS=$((RUNS + 1))
+            echo "::group::Скан #${RUNS} — $(date -u +%H:%MZ)"
+            sync
+            if ! python scan.py; then
+              FAILS=$((FAILS + 1))
+              echo "::error title=Scan::скан #${RUNS} упал ($(date -u +%H:%MZ))"
+            fi
+            save_state || FAILS=$((FAILS + 1))
+            echo "::endgroup::"
+
+            # следующий слот: минута 1, 16, 31 или 46 (через минуту после закрытия 15m-свечи)
+            NOW=$(date +%s)
+            NEXT=$(( ((NOW - 60) / 900 + 1) * 900 + 60 ))
+            if [ "$NEXT" -gt "$END" ]; then break; fi
+            sleep $(( NEXT - NOW ))
+          done
+
+          echo "Сканов: ${RUNS}, с ошибками: ${FAILS}" | tee -a "$GITHUB_STEP_SUMMARY"
+          # запуск будет красным, если были ошибки, — но эстафета всё равно передаётся (шаг ниже)
+          [ "$FAILS" -eq 0 ]
+
+      - name: Start next loop
+        if: ${{ !cancelled() }}   # при ручной отмене цепочка останавливается
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run scan.yml --ref "${GITHUB_REF_NAME}"
+
           python-version: "3.11"
           cache: pip
 
