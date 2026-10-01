@@ -274,6 +274,7 @@ def test_default_config_is_v32(cfg):
     """Боевой конфиг: контртрендовая ветка выключена, фильтр толпы включён."""
     assert cfg["contrarian"]["enabled"] is False
     assert cfg["contrarian"]["crowd_filter"] is True
+    assert cfg["contrarian"]["fng_filter"] is True  # v3.3
     assert cfg["timeframes"]["entry"] == "1h" and cfg["risk"]["exit_mode"] == "trail"
     assert cfg["signals"]["htf_mode"] == "loose" and cfg["costs"]["fee_pct"] == 0.045
     assert cfg["macro"]["mode"] == "shadow"  # макро-фильтр пока только наблюдает

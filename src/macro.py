@@ -39,7 +39,13 @@ import numpy as np
 import pandas as pd
 
 from . import config as _cfg
-from .data import HTTP, fetch_many
+import requests
+
+from .data import fetch_many
+
+# отдельная сессия без ретраев: Yahoo/FRED с серверов GitHub часто не отвечают,
+# долгие повторы только тормозят скан — сразу переходим к следующему источнику
+HTTP = requests.Session()
 
 log = logging.getLogger("macro")
 
@@ -74,7 +80,7 @@ def _daily_index(ts) -> pd.DatetimeIndex:
 def _yahoo(ticker: str, days: int) -> pd.Series | None:
     end = int(time.time())
     p = {"period1": end - days * 86400, "period2": end, "interval": "1d", "includePrePost": "false"}
-    r = HTTP.get(YAHOO_URL.format(t=ticker), params=p, headers=UA, timeout=20)
+    r = HTTP.get(YAHOO_URL.format(t=ticker), params=p, headers=UA, timeout=12)
     r.raise_for_status()
     res = r.json()["chart"]["result"][0]
     ts = res.get("timestamp") or []
@@ -89,7 +95,7 @@ def _yahoo(ticker: str, days: int) -> pd.Series | None:
 
 def _fred(series_id: str, days: int) -> pd.Series | None:
     start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
-    r = HTTP.get(FRED_URL, params={"id": series_id, "cosd": start}, headers=UA, timeout=20)
+    r = HTTP.get(FRED_URL, params={"id": series_id, "cosd": start}, headers=UA, timeout=12)
     r.raise_for_status()
     df = pd.read_csv(io.StringIO(r.text))
     s = pd.to_numeric(df.iloc[:, 1], errors="coerce")
@@ -100,7 +106,7 @@ def _fred(series_id: str, days: int) -> pd.Series | None:
 def _ecb(_: str, days: int) -> pd.Series | None:
     """Прокси DXY: 1 / EURUSD по курсам ЕЦБ (евро ≈ 58% индекса доллара). Уровень другой, динамика близкая."""
     start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
-    r = HTTP.get(ECB_URL, params={"format": "csvdata", "startPeriod": start}, headers=UA, timeout=20)
+    r = HTTP.get(ECB_URL, params={"format": "csvdata", "startPeriod": start}, headers=UA, timeout=12)
     r.raise_for_status()
     df = pd.read_csv(io.StringIO(r.text))
     v = pd.to_numeric(df["OBS_VALUE"], errors="coerce")

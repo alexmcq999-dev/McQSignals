@@ -57,7 +57,7 @@ contrarian:
   base_conf: 60
   crowd_filter: true       # трендовые сигналы: не входить туда, где толпа уже перегружена
   crowd_filter_z: 2.0
-  fng_filter: false        # трендовые: не покупать при F&G ≥ 80 и не шортить при ≤ 20
+  fng_filter: true         # v3.3 (с 01.10.2026): не покупать при F&G ≥ 80 и не шортить при ≤ 20
   fng_greed: 80
   fng_fear: 20
 
@@ -90,7 +90,7 @@ macro:
     - name: DXY
       yahoo: "DX-Y.NYB"
       fred: DTWEXBGS       # резерв: широкий индекс доллара ФРС (уровень другой, динамика близкая)
-      ecb: true            # последний резерв: 1/EURUSD по курсам ЕЦБ (евро ≈ 58% DXY)
+      ecb: "1/EURUSD"      # последний резерв: 1/EURUSD по курсам ЕЦБ (евро ≈ 58% DXY)
       trend_ema_weeks: 10  # тренд: недельное закрытие против EMA(10)
       trend_band_pct: 0.5  # мёртвая зона ±0.5% — внутри неё тренд «нейтральный»
       enabled: true
@@ -135,12 +135,12 @@ telegram:
 # Варианты для `python backtest.py --experiments` — все на одних данных, 3 периода.
 # Рабочий вариант — в плюсе во ВСЕХ периодах.
 experiments:
-  - name: "v3.2 (config): тренд 1H/4H мягкий + фильтр толпы, фьючерсы"
+  - name: "v3.3 (config): тренд 1H/4H мягкий + фильтры толпы и F&G, фьючерсы"
     set: {}
   - name: "v3.2 + сила ≥ 66"
     set: {signals: {min_score: 66}}
-  - name: "v3.2 + фильтр Fear & Greed"
-    set: {contrarian: {fng_filter: true}}
+  - name: "v3.3 без фильтра Fear & Greed (как v3.2)"
+    set: {contrarian: {fng_filter: false}}
   - name: "v3.2 без фильтра толпы"
     set: {contrarian: {crowd_filter: false}}
   - name: "v3.2 со строгим трендом (как v3.1)"
