@@ -74,6 +74,32 @@ news:
   show_in_signal: true           # показывать новостной фон в сообщении
   against_news_filter: false     # не открывать сделку против свежего (≤ 12ч) официального 🏛 события
 
+# Макро-режим: DXY против альтов (src/macro.py)
+# Фильтр включается ТОЛЬКО когда связь реально есть: корреляция недельных доходностей
+# драйвера и корзины альтов (топ без BTC/ETH ≈ TOTAL3) за corr_weeks ≤ corr_on.
+# Тогда: DXY ↑ → лонги против макро, DXY ↓ → шорты против макро.
+macro:
+  mode: shadow             # off | shadow (только наблюдение и статистика) | penalty | block
+  corr_weeks: 26           # окно корреляции, недель (~полгода)
+  corr_on: -0.5            # связь считается активной при корреляции ≤ −0.5
+  penalty: 10              # mode: penalty — минус к силе сигнала против макро
+  basket_size: 10          # сколько альтов в корзине (прокси TOTAL3)
+  refresh_hours: 6         # данные недельные — обновлять чаще незачем
+  notify_changes: true     # сообщение в Telegram, когда макро-режим меняется (не чаще раза в неделю)
+  drivers:
+    - name: DXY
+      yahoo: "DX-Y.NYB"
+      fred: DTWEXBGS       # резерв: широкий индекс доллара ФРС (уровень другой, динамика близкая)
+      trend_ema_weeks: 10  # тренд: недельное закрытие против EMA(10)
+      trend_band_pct: 0.5  # мёртвая зона ±0.5% — внутри неё тренд «нейтральный»
+      enabled: true
+    - name: US10Y
+      yahoo: "^TNX"
+      fred: DGS10
+      trend_ema_weeks: 10
+      trend_band_pct: 2.0  # доходности волатильнее индекса доллара
+      enabled: false       # включи, если CC альтов с US10Y тоже держится ниже −0.5
+
 risk:
   sl_min_atr: 1.0
   sl_max_atr: 2.5
@@ -126,5 +152,9 @@ experiments:
     set: {risk: {trail_atr: 2.0}}
   - name: "v3.2 трейлинг 4 ATR"
     set: {risk: {trail_atr: 4.0}}
+  - name: "v3.2 + макро DXY: штраф −10"
+    set: {macro: {mode: penalty}}
+  - name: "v3.2 + макро DXY: запрет против макро"
+    set: {macro: {mode: block}}
   - name: "v3.2 только лонги (справочно)"
     set: {signals: {sides: long_only}}

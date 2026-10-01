@@ -75,7 +75,8 @@ def merge_htf(df: pd.DataFrame, htf: pd.DataFrame, prefix: str = "") -> pd.DataF
 
 
 def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFrame | None = None,
-                   crowd: pd.DataFrame | None = None, fng: pd.DataFrame | None = None) -> pd.DataFrame:
+                   crowd: pd.DataFrame | None = None, fng: pd.DataFrame | None = None,
+                   macro: pd.DataFrame | None = None) -> pd.DataFrame:
     """df — 15m свечи (time, open, high, low, close, volume, close_time)."""
     f = df.copy()
     c = f["close"]
@@ -112,8 +113,9 @@ def build_features(df: pd.DataFrame, h1: pd.DataFrame | None, btc_h1: pd.DataFra
     f["htf_bias"] = f["htf_bias"].fillna(0)
     f["btc_htf_bias"] = f["btc_htf_bias"].fillna(0)
     from .crowd import attach
+    from .macro import attach as attach_macro
 
-    return attach(f, crowd, fng)
+    return attach_macro(attach(f, crowd, fng), macro)
 
 
 # ---------------------------------------------------------------- модули

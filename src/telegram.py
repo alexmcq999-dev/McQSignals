@@ -131,6 +131,15 @@ def crowd_line(row: pd.Series) -> str:
     return ("👥 " + " · ".join(parts) + "\n") if parts else ""
 
 
+def macro_line(row: pd.Series, side: int, cfg: dict) -> str:
+    from .macro import signal_line
+
+    try:
+        return signal_line(row, side, cfg)
+    except Exception:  # noqa: BLE001 — строка контекста не должна ломать сигнал
+        return ""
+
+
 def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: int, nctx: dict | None = None) -> str:
     rk, tf = cfg["risk"], cfg["timeframes"]
     side = "🟢 <b>LONG" if t.side > 0 else "🔴 <b>SHORT"
@@ -160,7 +169,7 @@ def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: i
         f"{int(rk['tp1_close_frac'] * 100)}%, стоп в б/у\n"
         f"{rest}\n"
         f"✅ Подтверждения {len(t.reasons)}/{n_modules}:\n{reasons}\n\n"
-        f"{crowd_line(row)}{news_line(nctx, cfg)}"
+        f"{crowd_line(row)}{macro_line(row, t.side, cfg)}{news_line(nctx, cfg)}"
         f"💼 Риск {rk['risk_per_trade_pct']:g}% депо → позиция ≈ {size:.0f}% депо\n"
         f"⏳ Макс. {rk['ttl_hours']}ч · свеча {ctime} {tzl} · {provider} · #{t.id}\n"
         f"<i>Не финансовый совет.</i>"

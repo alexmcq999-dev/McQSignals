@@ -13,6 +13,7 @@ from datetime import timedelta
 import pandas as pd
 
 from src import crowd as cw
+from src import macro as mc
 from src import news as nw
 from src import store
 from src.config import TF_MINUTES, load_config
@@ -112,7 +113,7 @@ def _pub(t: Trade, price: float | None = None) -> dict:
     return d
 
 
-def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev):
+def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev, macro_state=None):
     """state/app_signals.json — данные для вкладки «Сигналы» в мини-приложении marketnews999."""
     import json
 
@@ -131,6 +132,7 @@ def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_e
         "timeframes": {"entry": cfg["timeframes"]["entry"], "confirm": cfg["timeframes"]["confirm"]},
         "exit": {"mode": cfg["risk"].get("exit_mode"), "tp1_r": cfg["risk"]["tp1_r"],
                  "trail_atr": cfg["risk"].get("trail_atr")},
+        "macro": macro_state,
         "blackout": ({"title": blackout_ev.get("title"), "ts": blackout_ev["t"].isoformat()} if blackout_ev else None),
         "open": [_pub(t, prices.get(t.symbol)) for t in still_open],
         "closed": [_pub(Trade.from_dict(d)) for d in hist["closed"][-50:]][::-1],
@@ -226,6 +228,20 @@ def main():
             fng = cw.fetch_fng()
         except Exception as e:  # noqa: BLE001
             log.warning("Данные толпы: %s", e)
+    macro_tbl, macro_state = None, None
+    if mc.active(cfg):
+        try:
+            macro_tbl = mc.load_live(cfg, provider, bases, now)
+            macro_state = mc.current(macro_tbl, now, cfg)
+            if macro_state:
+                log.info("Макро: %s", macro_state)
+                prev = sig.get("macro_bias")
+                if (cfg["macro"].get("notify_changes", True) and prev is not None
+                        and prev != macro_state["bias"]):
+                    tg.broadcast(chats(), mc.change_text(macro_state, cfg), on_blocked=drop_chat)
+                sig["macro_bias"] = macro_state["bias"]
+        except Exception as e:  # noqa: BLE001
+            log.warning("Макро-режим: %s", e)
     news_data = nw.load(cfg)
     bo = nw.blackout(news_data, now, cfg)
     if bo:
@@ -240,7 +256,8 @@ def main():
             continue
         closed, last_price = split_closed(df, now)
         h_closed, _ = split_closed(h, now)
-        out = analyze(closed, h_closed, btc_h1, cfg, is_btc=(b == "BTC"), crowd=crowd_tbls.get(b), fng=fng)
+        out = analyze(closed, h_closed, btc_h1, cfg, is_btc=(b == "BTC"), crowd=crowd_tbls.get(b), fng=fng,
+                      macro=macro_tbl)
         prev = sig["last_bar"].get(b)
         last_seen = pd.Timestamp(prev) if prev else out["close_time"].iloc[-sc["lookback_bars_on_run"] - 1]
         tail = out.tail(sc["lookback_bars_on_run"])
@@ -299,7 +316,7 @@ def main():
         for src_ in (kE, kT):
             for b_, df_ in src_.items():
                 prices[b_] = float(df_["close"].iloc[-1])
-        export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo)
+        export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo, macro_state)
     except Exception as e:  # noqa: BLE001
         log.warning("Экспорт для мини-приложения: %s", e)
     store.save("history", hist)

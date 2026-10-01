@@ -140,7 +140,7 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
             return {k: 5e7 for k in frames}
 
         def klines(self, b, tf, limit, end_ms=None):
-            rule = {"15m": None, "1h": "1h", "4h": "4h"}[tf]
+            rule = {"15m": None, "1h": "1h", "4h": "4h", "1d": "1D"}[tf]
             df = frames[b] if rule is None else resample(frames[b], rule)
             return df.tail(limit).reset_index(drop=True)
 
@@ -159,6 +159,10 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
                   "ts": (now - pd.Timedelta(hours=2)).isoformat()}],
         "sentiment": {"fng": {"crypto": {"value": 75, "rating_ru": "жадность"}}},
         "calendar": [{"ts": (now + pd.Timedelta(hours=5)).isoformat(), "title": "CPI", "impact": "High"}]})
+    # макро: DXY без сети — синтетический дневной ряд
+    dxy_idx = pd.date_range(end=now.floor("D"), periods=600, freq="D", tz="UTC")
+    dxy = pd.Series(100 * np.exp(np.cumsum(np.random.default_rng(5).normal(0, 0.004, 600))), index=dxy_idx)
+    monkeypatch.setattr(scan.mc, "fetch_driver", lambda d, days: dxy)
     monkeypatch.setattr(data, "_coingecko_caps", lambda: [{"symbol": k, "name": k, "mcap": 2e8} for k in frames])
     monkeypatch.setattr(sys, "argv", ["scan.py", "--dry-run", "--now", now.isoformat()])
     # лояльный порог, чтобы гарантированно увидеть сигнал на последних свечах
@@ -176,6 +180,8 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
     assert len(st["last_bar"]) >= 40
     out = capsys.readouterr().out
     assert len(st["open"]) > 0 and ("LONG" in out or "SHORT" in out)
+    assert "🌐 Макро: DXY" in out and (tmp_path / "macro.json").exists()
+    assert app["macro"] and app["macro"]["drivers"][0]["name"] == "DXY"
     # второй прогон с тем же временем не должен дублировать сигналы
     before = len(st["open"])
     scan.main()
@@ -270,3 +276,75 @@ def test_default_config_is_v32(cfg):
     assert cfg["contrarian"]["crowd_filter"] is True
     assert cfg["timeframes"]["entry"] == "1h" and cfg["risk"]["exit_mode"] == "trail"
     assert cfg["signals"]["htf_mode"] == "loose" and cfg["costs"]["fee_pct"] == 0.045
+    assert cfg["macro"]["mode"] == "shadow"  # макро-фильтр пока только наблюдает
+
+
+# ------------------------------------------------------------------ макро-режим (DXY)
+
+def _macro_inputs(n_days=900, seed=7, coupling=-0.8):
+    """Дневной DXY и корзина альтов с заданной связью недельных доходностей."""
+    rng = np.random.default_rng(seed)
+    idx = pd.date_range("2024-01-01", periods=n_days, freq="D", tz="UTC")
+    rd = rng.normal(0, 0.004, n_days)
+    ra = coupling * rd * 6 + rng.normal(0, 0.01, n_days)
+    return pd.Series(100 * np.exp(np.cumsum(rd)), index=idx), pd.Series(np.exp(np.cumsum(ra)), index=idx)
+
+
+def test_macro_table_causal(cfg):
+    """Неделя становится известна только после её закрытия; будущее не меняет прошлое."""
+    from src import macro as mc
+
+    dxy, bsk = _macro_inputs()
+    full = mc.build_table({"DXY": dxy}, bsk, cfg)
+    assert (full["usable_time"] > full["week"]).all()
+    assert full["macro_DXY_corr"].dropna().mean() < -0.5  # сильная обратная связь распознана
+    cut = pd.Timestamp("2025-06-15", tz="UTC")
+    part = mc.build_table({"DXY": dxy[dxy.index < cut]}, bsk[bsk.index < cut], cfg)
+    common = part[part["usable_time"] <= cut]["week"]
+    a = part.set_index("week").loc[common, ["macro_DXY_corr", "macro_DXY_trend", "macro_bias"]]
+    b = full.set_index("week").loc[common, ["macro_DXY_corr", "macro_DXY_trend", "macro_bias"]]
+    assert np.allclose(a.fillna(0).to_numpy(float), b.fillna(0).to_numpy(float))
+    # без связи фильтр молчит
+    dxy0, bsk0 = _macro_inputs(coupling=0.0, seed=8)
+    t0 = mc.build_table({"DXY": dxy0}, bsk0, cfg)
+    assert (t0["macro_bias"] != 0).mean() < 0.25
+
+
+def test_macro_modes(cfg):
+    """shadow не меняет сигналы; block убирает лонги при «DXY ↑ и связь есть»; penalty режет силу."""
+    from src.engine import score_frame
+    from src.strategies import build_features
+
+    btc = resample(synth(3000, seed=999))
+    d = synth(3000, seed=4)
+    weeks = pd.date_range("2026-05-24", periods=12, freq="W-SUN", tz="UTC")
+    tbl = pd.DataFrame({"week": weeks, "usable_time": weeks + pd.Timedelta(days=1), "macro_bias": -1.0,
+                        "macro_DXY_corr": -0.7, "macro_DXY_trend": 1, "macro_DXY_on": 1.0, "macro_DXY_dev": 1.2})
+    f = build_features(d, resample(d), btc, macro=tbl)
+    lo = {"signals": {"min_score": 40, "min_agree": 3}}
+    off = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "off"}}))
+    sh = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "shadow"}}))
+    bl = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "block"}}))
+    pe = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "penalty", "penalty": 15}}))
+    known = f["macro_bias"] == -1
+    assert known.any() and (f.loc[~known, "macro_bias"] == 0).all()
+    assert (off["signal"] == sh["signal"]).all()
+    assert (off.loc[known, "signal"] > 0).any() and not (bl.loc[known, "signal"] > 0).any()
+    assert (bl.loc[known, "signal"] < 0).sum() >= (off.loc[known, "signal"] < 0).sum() * 0.5
+    longs = known & (off["score"] > 0)
+    assert np.allclose(pe.loc[longs, "conf"], (off.loc[longs, "conf"] - 15).clip(lower=0))
+    t = make_trade(sh[sh["signal"] != 0].iloc[-1], int(sh[sh["signal"] != 0].iloc[-1]["signal"]), "X",
+                   load_config(overrides={"macro": {"mode": "shadow"}}))
+    assert t.macro in ("with", "against", "neutral")
+
+
+def test_macro_texts(cfg):
+    from src import macro as mc
+
+    dxy, bsk = _macro_inputs()
+    tbl = mc.build_table({"DXY": dxy}, bsk, cfg)
+    st = mc.current(tbl, pd.Timestamp("2026-06-01", tz="UTC"), cfg)
+    assert st and st["drivers"][0]["name"] == "DXY"
+    assert "Макро-режим" in mc.change_text(st, cfg)
+    row = tbl.iloc[-1]
+    assert mc.signal_line(row, 1, cfg).startswith("🌐 Макро: DXY")

@@ -61,9 +61,9 @@ def simulate(out: pd.DataFrame, symbol: str, cfg: dict, start_time, end_time=Non
     return trades
 
 
-def prepare(data: dict, btc_htf, fng=None) -> dict:
+def prepare(data: dict, btc_htf, fng=None, macro=None) -> dict:
     """Фичи не зависят от порогов — считаем один раз на монету."""
-    return {sym: build_features(dE, dC, None if sym == "BTC" else btc_htf, crowd, fng)
+    return {sym: build_features(dE, dC, None if sym == "BTC" else btc_htf, crowd, fng, macro)
             for sym, (dE, dC, crowd) in data.items()}
 
 
@@ -113,6 +113,10 @@ def report(trades: list[dict], cfg: dict, meta: dict) -> str:
     lines += [_row("LONG", [t for t in trades if t["side"] > 0]), _row("SHORT", [t for t in trades if t["side"] < 0])]
     lines += [_row("Трендовые сигналы", [t for t in trades if t.get("kind", "trend") == "trend"]),
               _row("Контртрендовые (против толпы)", [t for t in trades if t.get("kind") == "contra"])]
+    if any(t.get("macro") for t in trades):
+        lines += [_row("Макро: по направлению сделки", [t for t in trades if t.get("macro") == "with"]),
+                  _row("Макро: против сделки", [t for t in trades if t.get("macro") == "against"]),
+                  _row("Макро: нейтрально / связи нет", [t for t in trades if t.get("macro") == "neutral"])]
     for reg in ("trend", "neutral", "range"):
         lines.append(_row(f"Режим: {reg}", [t for t in trades if t["regime"] == reg]))
     for lo, hi in ((0, 70), (70, 80), (80, 101)):
@@ -152,6 +156,7 @@ RULE = {"15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1D"}
 
 def load_live(cfg, days, n_symbols):
     from src import crowd as cw
+    from src import macro as mc
     from src.config import ROOT, TF_MINUTES
     from src.data import build_universe, fetch_many, pick_provider, split_closed
 
@@ -176,10 +181,19 @@ def load_live(cfg, days, n_symbols):
         log.info("Толпа: данные есть по %d/%d монетам; F&G: %s", sum(v is not None for v in crowd_tbls.values()),
                  len(bases), "да" if fng is not None else "нет")
 
+    macro_tbl = None
+    if mc.active(cfg) or any((e.get("set") or {}).get("macro") for e in cfg.get("experiments", [])):
+        mcfg = cfg if mc.active(cfg) else load_config(overrides={"macro": {"mode": "shadow"}})
+        try:
+            macro_tbl = mc.build_live(mcfg, provider, bases, days=days + mc.warmup_days(mcfg) + 14)
+        except Exception as e:  # noqa: BLE001
+            log.warning("Макро: %s", e)
+        log.info("Макро: %s", f"{len(macro_tbl)} недель" if macro_tbl is not None else "нет данных")
+
     data = {b: (split_closed(kE[b], now)[0], split_closed(kC[b], now)[0], crowd_tbls.get(b))
             for b in bases if b in kE and b in kC}
     btc = split_closed(kC["BTC"], now)[0] if "BTC" in kC else None
-    return data, btc, fng, provider.name
+    return data, btc, fng, provider.name, macro_tbl
 
 
 def load_synthetic(cfg, days, n_symbols):
@@ -198,7 +212,7 @@ def load_synthetic(cfg, days, n_symbols):
     for i in range(n_symbols):
         d = synth(n, seed=i, tf_min=m)
         data[f"SYN{i}"] = (d, resample(d, rule), None)
-    return data, resample(btc, rule), None, "synthetic"
+    return data, resample(btc, rule), None, "synthetic", None
 
 
 def _cell(tr):
@@ -278,12 +292,13 @@ def main():
     cfg = load_config()
     days = a.days or (cfg["backtest"].get("experiments_days", 120) if a.experiments else cfg["backtest"]["days"])
     nsym = a.symbols or cfg["backtest"]["symbols"]
-    data, btc, fng, provider = load_synthetic(cfg, days, nsym) if a.synthetic else load_live(cfg, days, nsym)
+    data, btc, fng, provider, macro_tbl = (load_synthetic(cfg, days, nsym) if a.synthetic
+                                           else load_live(cfg, days, nsym))
     last = max(d[0]["close_time"].iloc[-1] for d in data.values())
     start = last - pd.Timedelta(days=days)
     meta = {"date": datetime.now(timezone.utc).strftime("%Y-%m-%d"), "days": days,
             "n_symbols": len(data), "provider": provider}
-    feats = prepare(data, btc, fng)
+    feats = prepare(data, btc, fng, macro_tbl)
     send = not a.no_telegram and not a.synthetic
     REPORTS_DIR.mkdir(exist_ok=True)
 

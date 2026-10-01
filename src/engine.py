@@ -57,6 +57,12 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
         bonus += np.where(btc == direction, 3.0, np.where(btc == -direction, -10.0, 0.0))
     bonus += np.where(f["vol_z"] > 1.5, 3.0, 0.0)
     conf = (raw.abs() + bonus).clip(0, 100)
+    # Макро-режим (DXY/доходности против альтов): см. src/macro.py
+    mc = cfg.get("macro", {})
+    mmode = mc.get("mode", "off")
+    mb = f["macro_bias"].fillna(0) if "macro_bias" in f else pd.Series(0.0, index=f.index)
+    if mmode == "penalty":
+        conf = (conf - np.where(mb * direction < 0, float(mc.get("penalty", 10)), 0.0)).clip(0, 100)
 
     ok = (
         (conf >= sc["min_score"])
@@ -89,6 +95,9 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
         g = f["fng"]
         cond_long &= ~(g >= cr.get("fng_greed", 80))
         cond_short &= ~(g <= cr.get("fng_fear", 20))
+    if mmode == "block":
+        cond_long &= ~(mb < 0)   # доллар растёт при активной связи — лонги против макро
+        cond_short &= ~(mb > 0)
     # Триггер: условие появилось на ЭТОМ баре (событие, а не состояние)
     trig_long = cond_long & ~cond_long.shift(1, fill_value=False)
     trig_short = cond_short & ~cond_short.shift(1, fill_value=False)
@@ -134,8 +143,8 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
 
 
 def analyze(df: pd.DataFrame, htf: pd.DataFrame | None, btc_htf: pd.DataFrame | None, cfg: dict, is_btc=False,
-            crowd=None, fng=None):
-    return score_frame(build_features(df, htf, None if is_btc else btc_htf, crowd, fng), cfg, is_btc=is_btc)
+            crowd=None, fng=None, macro=None):
+    return score_frame(build_features(df, htf, None if is_btc else btc_htf, crowd, fng, macro), cfg, is_btc=is_btc)
 
 
 # ---------------------------------------------------------------- уровни и сделка
@@ -154,6 +163,7 @@ class Trade:
     regime: str = ""
     reasons: list = field(default_factory=list)
     kind: str = "trend"  # trend | contra
+    macro: str = ""      # with | against | neutral — положение сделки относительно макро-режима
     cost_r: float = 0.0  # издержки туда-обратно в R
     atr: float = 0.0     # ATR на входе (для трейлинга)
     peak: float = 0.0    # лучшая цена с момента входа (для трейлинга)
@@ -192,6 +202,10 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
     kind = str(row.get("kind", "") or "trend")
     pool = CONTRARIAN if kind == "contra" else [m for m in MODULES if m not in CONTRARIAN]
     reasons = [m for m in pool if ("v_" + m) in row and row["v_" + m] * side > 0.3]
+    mb = row.get("macro_bias", 0)
+    mb = 0.0 if mb is None or pd.isna(mb) else float(mb)
+    macro = "" if cfg.get("macro", {}).get("mode", "off") == "off" else \
+        ("with" if mb * side > 0 else "against" if mb * side < 0 else "neutral")
     return Trade(
         symbol=symbol,
         side=side,
@@ -205,6 +219,7 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
         regime=str(row["regime"]),
         reasons=reasons,
         kind=kind,
+        macro=macro,
         cost_r=round(2 * cost_pct(cfg) / 100 * e / dist, 4),
         atr=a,
         peak=e,
