@@ -44,9 +44,11 @@ from .data import HTTP, fetch_many
 log = logging.getLogger("macro")
 
 YAHOO_URL = "https://query1.finance.yahoo.com/v8/finance/chart/{t}"
+ECB_URL = "https://data-api.ecb.europa.eu/service/data/EXR/D.USD.EUR.SP00.A"
 FRED_URL = "https://fred.stlouisfed.org/graph/fredgraph.csv"
 UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"}
 EXCLUDE_FROM_BASKET = {"BTC", "ETH"}
+DIAG: dict = {}  # диагностика последней загрузки (пишется в state/macro.json и отчёт бэктеста)
 
 
 def enabled_drivers(cfg: dict) -> list[dict]:
@@ -95,18 +97,39 @@ def _fred(series_id: str, days: int) -> pd.Series | None:
     return s.dropna()
 
 
+def _ecb(_: str, days: int) -> pd.Series | None:
+    """Прокси DXY: 1 / EURUSD по курсам ЕЦБ (евро ≈ 58% индекса доллара). Уровень другой, динамика близкая."""
+    start = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days)).strftime("%Y-%m-%d")
+    r = HTTP.get(ECB_URL, params={"format": "csvdata", "startPeriod": start}, headers=UA, timeout=20)
+    r.raise_for_status()
+    df = pd.read_csv(io.StringIO(r.text))
+    v = pd.to_numeric(df["OBS_VALUE"], errors="coerce")
+    s = pd.Series((100.0 / v).to_numpy(), index=_daily_index(df["TIME_PERIOD"]))
+    return s.dropna()
+
+
+SOURCES = (("Yahoo", _yahoo, "yahoo"), ("FRED", _fred, "fred"), ("ECB", _ecb, "ecb"))
+
+
 def fetch_driver(d: dict, days: int) -> pd.Series | None:
-    """Дневные закрытия драйвера: Yahoo → FRED. None, если оба недоступны."""
-    for src, fn, key in (("Yahoo", _yahoo, "yahoo"), ("FRED", _fred, "fred")):
+    """Дневные закрытия драйвера: Yahoo → FRED → ЕЦБ (прокси). None, если всё недоступно."""
+    info = DIAG.setdefault("drivers", {}).setdefault(d["name"], {"errors": []})
+    info["errors"] = []
+    for src, fn, key in SOURCES:
         if not d.get(key):
             continue
         try:
-            s = fn(d[key], days)
+            s = fn(str(d[key]), days)
             if s is not None and len(s) > 60:
                 log.info("Макро %s: %d дней (%s %s)", d["name"], len(s), src, d[key])
+                info.update({"source": f"{src} {d[key]}", "days": int(len(s)),
+                             "last": s.index[-1].strftime("%Y-%m-%d")})
                 return s
+            info["errors"].append(f"{src}: мало данных ({0 if s is None else len(s)})")
         except Exception as e:  # noqa: BLE001
             log.warning("Макро %s из %s недоступен: %s", d["name"], src, e)
+            info["errors"].append(f"{src}: {str(e)[:160]}")
+    info["source"] = None
     return None
 
 
@@ -246,7 +269,25 @@ def build_live(cfg: dict, provider, bases: list[str], days: int | None = None) -
     if not drivers:
         return None
     frames = fetch_many(provider, basket_bases(bases, int(mc.get("basket_size", 10))), "1d", days)
-    return build_table(drivers, basket_index(frames), cfg)
+    basket = basket_index(frames)
+    DIAG["basket"] = {"coins": sorted(frames), "days": 0 if basket is None else int(len(basket))}
+    tbl = build_table(drivers, basket, cfg)
+    if tbl is not None:
+        DIAG["table"] = summary(tbl, cfg)
+    return tbl
+
+
+def summary(tbl: pd.DataFrame, cfg: dict, start=None) -> dict:
+    """Сколько недель есть данные и как часто фильтр был активен."""
+    t = tbl if start is None else tbl[tbl["week"] >= pd.Timestamp(start)]
+    out = {"weeks": int(len(t)), "bias_on_pct": round(float((t["macro_bias"] != 0).mean() * 100), 1) if len(t) else 0}
+    for d in enabled_drivers(cfg):
+        c = t.get(f"macro_{d['name']}_corr")
+        if c is not None and c.notna().any():
+            out[d["name"]] = {"corr_last": round(float(c.dropna().iloc[-1]), 2), "corr_min": round(float(c.min()), 2),
+                              "corr_max": round(float(c.max()), 2),
+                              "on_pct": round(float((t[f"macro_{d['name']}_on"] == 1).mean() * 100), 1)}
+    return out
 
 
 def load_live(cfg: dict, provider, bases: list[str], now: pd.Timestamp) -> pd.DataFrame | None:
@@ -261,17 +302,25 @@ def load_live(cfg: dict, provider, bases: list[str], now: pd.Timestamp) -> pd.Da
             cache = {}
     fresh = (cache.get("key") == _cfg_key(cfg)
              and time.time() - cache.get("updated_ts", 0) < float(mc.get("refresh_hours", 6)) * 3600)
-    if fresh:
+    retry_wait = time.time() - cache.get("attempt_ts", 0) < 3600  # после неудачи — не чаще раза в час
+    if fresh or (retry_wait and cache.get("table") is not None and cache.get("last_error")):
         return _from_json(cache.get("table", []))
-    tbl = build_live(cfg, provider, bases)
-    if tbl is None:
-        log.warning("Макро: свежих данных нет, использую кэш")
-        return _from_json(cache.get("table", []))
-    cache.update({"key": _cfg_key(cfg), "updated_ts": time.time(), "updated": now.isoformat(),
-                  "table": _to_json(tbl)})
+    DIAG.clear()
+    try:
+        tbl = build_live(cfg, provider, bases)
+        err = None if tbl is not None else "нет данных драйверов или корзины"
+    except Exception as e:  # noqa: BLE001
+        tbl, err = None, str(e)[:300]
+    cache.update({"attempt_ts": time.time(), "attempt": now.isoformat(), "diag": DIAG, "last_error": err})
+    if tbl is not None:
+        cache.update({"key": _cfg_key(cfg), "updated_ts": time.time(), "updated": now.isoformat(),
+                      "table": _to_json(tbl)})
+    else:
+        log.warning("Макро: %s — использую кэш", err)
+        cache.setdefault("table", [])
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
-    return tbl
+    path.write_text(json.dumps(cache, ensure_ascii=False, separators=(",", ":"), default=str), encoding="utf-8")
+    return tbl if tbl is not None else _from_json(cache.get("table", []))
 
 
 # ------------------------------------------------------------------ тексты

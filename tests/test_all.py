@@ -348,3 +348,39 @@ def test_macro_texts(cfg):
     assert "Макро-режим" in mc.change_text(st, cfg)
     row = tbl.iloc[-1]
     assert mc.signal_line(row, 1, cfg).startswith("🌐 Макро: DXY")
+
+
+def test_macro_sources_and_diag(cfg, monkeypatch, tmp_path):
+    """Yahoo и FRED недоступны → резерв ЕЦБ; при полном отказе ошибка пишется в state/macro.json."""
+    import json as _j
+
+    from src import config, macro as mc
+
+    class R:
+        def __init__(self, text=None, status=200):
+            self.text, self.status_code = text, status
+
+        def raise_for_status(self):
+            if self.status_code != 200:
+                raise RuntimeError(f"HTTP {self.status_code}")
+
+    days = pd.date_range("2025-01-01", periods=300, freq="B")
+    ecb_csv = "KEY,TIME_PERIOD,OBS_VALUE\n" + "\n".join(f"EXR,{d:%Y-%m-%d},{1.1 + i * 1e-4:.5f}"
+                                                         for i, d in enumerate(days))
+    calls = []
+
+    def fake_get(url, **kw):
+        calls.append(url)
+        return R(ecb_csv) if "ecb" in url else R(status=429)
+
+    monkeypatch.setattr(mc.HTTP, "get", fake_get)
+    drv = mc.enabled_drivers(cfg)[0]
+    s = mc.fetch_driver(drv, 400)
+    assert s is not None and len(s) == 300 and s.iloc[0] > s.iloc[-1]  # 1/EURUSD: евро ↑ → доллар ↓
+    assert mc.DIAG["drivers"]["DXY"]["source"].startswith("ECB") and len(mc.DIAG["drivers"]["DXY"]["errors"]) == 2
+
+    monkeypatch.setattr(mc.HTTP, "get", lambda url, **kw: R(status=403))
+    monkeypatch.setattr(config, "STATE_DIR", tmp_path)
+    assert mc.load_live(cfg, None, ["SOL"], pd.Timestamp("2026-10-01", tz="UTC")) is None
+    st = _j.loads((tmp_path / "macro.json").read_text())
+    assert st["last_error"] and "HTTP 403" in " ".join(st["diag"]["drivers"]["DXY"]["errors"])

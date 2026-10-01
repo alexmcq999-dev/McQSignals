@@ -151,6 +151,8 @@ def tg_summary(trades, cfg, meta) -> str:
 
 # ------------------------------------------------------------------ загрузка
 
+MACRO_NOTE = [""]  # строка о макро-данных для отчёта экспериментов
+
 RULE = {"15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1D"}
 
 
@@ -188,7 +190,18 @@ def load_live(cfg, days, n_symbols):
             macro_tbl = mc.build_live(mcfg, provider, bases, days=days + mc.warmup_days(mcfg) + 14)
         except Exception as e:  # noqa: BLE001
             log.warning("Макро: %s", e)
-        log.info("Макро: %s", f"{len(macro_tbl)} недель" if macro_tbl is not None else "нет данных")
+        log.info("Макро: %s · %s", f"{len(macro_tbl)} недель" if macro_tbl is not None else "нет данных", mc.DIAG)
+        if macro_tbl is not None:
+            mstat = mc.summary(macro_tbl, mcfg, pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=days))
+            src = ", ".join(f"{k}: {v.get('source')}" for k, v in mc.DIAG.get("drivers", {}).items())
+            per = "; ".join(f"{d['name']} корр. {v['corr_min']:+.2f}…{v['corr_max']:+.2f}, связь активна "
+                            f"{v['on_pct']:.0f}% недель" for d in mc.enabled_drivers(mcfg)
+                            if isinstance(v := mstat.get(d["name"]), dict))
+            MACRO_NOTE[0] = (f"Макро-данные: {src} · корзина {len(mc.DIAG.get('basket', {}).get('coins', []))} монет · "
+                             f"{per} · фильтр действовал {mstat['bias_on_pct']:.0f}% недель периода")
+        else:
+            errs = "; ".join(f"{k}: {' | '.join(v.get('errors', []))}" for k, v in mc.DIAG.get("drivers", {}).items())
+            MACRO_NOTE[0] = f"⚠️ Макро-данных НЕТ — варианты с макро совпадут с базовым. {errs}"
 
     data = {b: (split_closed(kE[b], now)[0], split_closed(kC[b], now)[0], crowd_tbls.get(b))
             for b in bases if b in kE and b in kC}
@@ -248,6 +261,7 @@ def experiments(feats, cfg, first, last, meta) -> tuple[str, list]:
         f"# Эксперименты McQ Signals — {meta['date']}", "",
         f"Монет: {meta['n_symbols']} · источник: {meta['provider']} · "
         f"{cfg['timeframes']['entry'].upper()} + {cfg['timeframes']['confirm'].upper()} · R после комиссий", "",
+        *([MACRO_NOTE[0], ""] if MACRO_NOTE[0] else []),
         "В ячейках периодов: `сделок / средний R на сделку`. ✅ — в плюсе во ВСЕХ периодах (и ≥10 сделок в каждом).", "",
         f"| Вариант | {heads} | Всего сделок | WR | Ср. R | PF | Макс. просадка R |",
         "|---" * (k + 6) + "|", *rows, "",
