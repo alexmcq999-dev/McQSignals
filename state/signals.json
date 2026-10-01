@@ -59,5 +59,6 @@
  },
  "cooldown": {},
  "seq": 6,
- "last_daily": "2026-10-01"
+ "last_daily": "2026-10-01",
+ "macro_bias": 0
 }
