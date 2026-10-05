@@ -30,50 +30,12 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-05T15:29:59.999000+00:00",
-   "bars_held": 342,
+   "last_checked": "2026-10-05T15:44:59.999000+00:00",
+   "bars_held": 343,
    "id": "0007",
    "msg_ids": {
     "6542171685": 53,
     "278119034": 54
-   }
-  },
-  {
-   "symbol": "ETH",
-   "side": 1,
-   "entry": 2726.49,
-   "sl": 2696.31522324127,
-   "tp1": 2771.752165138095,
-   "tp2": 2817.01433027619,
-   "risk": 30.174776758730033,
-   "opened": "2026-10-05T07:59:59.999000+00:00",
-   "conf": 79.1,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "pullback",
-    "macd",
-    "rsi_regime",
-    "stoch_rsi",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.1355,
-   "atr": 12.069910703492013,
-   "peak": 2734.55,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-05T15:29:59.999000+00:00",
-   "bars_held": 30,
-   "id": "0008",
-   "msg_ids": {
-    "6542171685": 65,
-    "278119034": 66
    }
   },
   {
@@ -106,8 +68,8 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-05T15:29:59.999000+00:00",
-   "bars_held": 30,
+   "last_checked": "2026-10-05T15:44:59.999000+00:00",
+   "bars_held": 31,
    "id": "0009",
    "msg_ids": {
     "6542171685": 67,
