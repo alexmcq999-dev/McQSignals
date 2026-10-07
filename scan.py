@@ -12,6 +12,7 @@ from datetime import timedelta
 
 import pandas as pd
 
+from src import brief as br
 from src import crowd as cw
 from src import macro as mc
 from src import news as nw
@@ -113,7 +114,8 @@ def _pub(t: Trade, price: float | None = None) -> dict:
     return d
 
 
-def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev, macro_state=None):
+def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev, macro_state=None, crowd=None,
+               fng_value=None):
     """state/app_signals.json — данные для вкладки «Сигналы» в мини-приложении marketnews999."""
     import json
 
@@ -138,6 +140,8 @@ def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_e
         "closed": [_pub(Trade.from_dict(d)) for d in hist["closed"][-50:]][::-1],
         "stats": {"d7": st(7), "d30": st(30), "all": st(None)},
         "backtest": json.loads(exp.read_text()) if exp.exists() else None,
+        "crowd": crowd or [],
+        "fng": None if fng_value is None or pd.isna(fng_value) else int(fng_value),
     }
     (store.STATE_DIR / "app_signals.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
 
@@ -243,6 +247,9 @@ def main():
         except Exception as e:  # noqa: BLE001
             log.warning("Макро-режим: %s", e)
     news_data = nw.load(cfg)
+    for text in br.event_alerts(news_data, now, sig, cfg, still_open):
+        tg.broadcast(chats(), text, on_blocked=drop_chat)
+        log.info("Алерт о событии отправлен")
     bo = nw.blackout(news_data, now, cfg)
     if bo:
         log.info("Блэкаут: %s (%s) — новые сигналы не отправляем", bo.get("title"), bo["t"])
@@ -300,23 +307,31 @@ def main():
         log.info("СИГНАЛ %s %s conf=%.0f", t.symbol, "LONG" if t.side > 0 else "SHORT", t.conf)
     log.info("Кандидатов: %d, отправлено: %d, открыто: %d", len(candidates), min(len(candidates), slots), len(still_open))
 
-    # ---------------------------------------------- 3. ежедневный отчёт
-    hour = cfg.get("telegram", {}).get("daily_report_hour_utc", 6)
-    today = now.strftime("%Y-%m-%d")
-    if now.hour == hour and sig.get("last_daily") != today:
-        sig["last_daily"] = today
-        text = stats_text(_closed_since(hist, 1), "Итоги 24ч") + "\n\n" + stats_text(_closed_since(hist, 7), "7 дней")
-        tg.broadcast(chats(), text, on_blocked=drop_chat)
+    # ---------------------------------------------- 3. утренний «План дня»
+    prices = {}
+    for src_ in (kE, kT):
+        for b_, df_ in src_.items():
+            prices[b_] = float(df_["close"].iloc[-1])
+    crowd_rows = br.crowd_rows(crowd_tbls, bases)
+    if br.morning_due(now, sig, cfg):
+        from src.stats import summarize
+
+        sig["last_daily"] = now.tz_convert(cfg["telegram"].get("timezone", "Europe/Moscow")).strftime("%Y-%m-%d")
+        try:
+            text = br.morning_text(now, cfg, news_data, crowd_rows, [_pub(t, prices.get(t.symbol)) for t in still_open],
+                                   summarize(_closed_since(hist, 1), "r_gross"),
+                                   summarize(_closed_since(hist, 7), "r_gross"), macro_state)
+            tg.broadcast(chats(), text, on_blocked=drop_chat)
+            log.info("План дня отправлен")
+        except Exception as e:  # noqa: BLE001
+            log.warning("План дня: %s", e)
 
     sig["open"] = [t.to_dict() for t in still_open]
     sig["cooldown"] = {k: v for k, v in sig["cooldown"].items() if pd.Timestamp(v) > now}
     store.save("signals", sig)
     try:
-        prices = {}
-        for src_ in (kE, kT):
-            for b_, df_ in src_.items():
-                prices[b_] = float(df_["close"].iloc[-1])
-        export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo, macro_state)
+        export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo, macro_state, crowd_rows,
+                   (fng["fng"].iloc[-1] if fng is not None and len(fng) else None))
     except Exception as e:  # noqa: BLE001
         log.warning("Экспорт для мини-приложения: %s", e)
     store.save("history", hist)

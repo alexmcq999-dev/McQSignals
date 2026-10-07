@@ -385,3 +385,23 @@ def test_macro_sources_and_diag(cfg, monkeypatch, tmp_path):
     assert mc.load_live(cfg, None, ["SOL"], pd.Timestamp("2026-10-01", tz="UTC")) is None
     st = _j.loads((tmp_path / "macro.json").read_text())
     assert st["last_error"] and "HTTP 403" in " ".join(st["diag"]["drivers"]["DXY"]["errors"])
+
+
+def test_brief_alerts_and_plan(cfg):
+    from src import brief as br
+
+    now = pd.Timestamp("2026-10-08 05:10", tz="UTC")
+    ts = lambda h: (now + pd.Timedelta(hours=h)).tz_convert("Europe/Moscow").isoformat()  # noqa: E731
+    nd = {"calendar": [
+        {"ts": ts(0.5), "country": "USD", "title": "Unemployment Claims", "impact": "High", "forecast": "225K"},
+        {"ts": ts(3), "country": "USD", "title": "Later", "impact": "High"},
+        {"ts": ts(-20), "country": "USD", "title": "CPI m/m", "impact": "High", "forecast": "0.3%",
+         "result": {"actual": "0.4%", "vs_forecast": "above", "reaction": [{"asset": "BTC", "unit": "pct", "value": -1.2}]}},
+    ]}
+    sig = {}
+    first = br.event_alerts(nd, now, sig, cfg, [])
+    assert len(first) == 1 and "Unemployment Claims" in first[0]
+    assert br.event_alerts(nd, now + pd.Timedelta(minutes=10), sig, cfg, []) == []   # без дублей
+    assert br.morning_due(now, {}, cfg) and not br.morning_due(now, {"last_daily": "2026-10-08"}, cfg)
+    text = br.morning_text(now, cfg, nd, [], [], {"n": 0}, {"n": 0})
+    assert "План дня" in text and "Unemployment Claims" in text and "0.4%" in text

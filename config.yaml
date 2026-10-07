@@ -73,6 +73,7 @@ news:
   calendar_blackout_minutes: 45  # не давать новые сигналы за 45 мин до и после High-impact макро-события
   show_in_signal: true           # показывать новостной фон в сообщении
   against_news_filter: false     # не открывать сделку против свежего (≤ 12ч) официального 🏛 события
+  alert_minutes: 40              # алерт в Telegram за ≤ 40 мин до High-события (скан раз в ~15 мин)
 
 # Макро-режим: DXY против альтов (src/macro.py)
 # Фильтр включается ТОЛЬКО когда связь реально есть: корреляция недельных доходностей
@@ -128,7 +129,7 @@ backtest:
 
 telegram:
   allow_public_subscribe: true
-  daily_report_hour_utc: 6       # 09:00 МСК
+  brief_hour_local: 8            # «План дня» — первый скан после 08:00 по timezone (до полудня)
   timezone: Europe/Moscow
   test_mode: true                # 🧪 пометка «ТЕСТ» на сигналах, пока стратегия не прошла проверку
 
