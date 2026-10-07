@@ -287,6 +287,44 @@
     "6542171685": 67,
     "278119034": 68
    }
+  },
+  {
+   "symbol": "ZRO",
+   "side": 1,
+   "entry": 2.049,
+   "sl": 2.1564237406471385,
+   "tp1": 2.2272203241910766,
+   "tp2": 2.405440648382153,
+   "risk": 0.11881354946071773,
+   "opened": "2026-10-05T15:59:59.999000+00:00",
+   "conf": 74.8,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.0259,
+   "atr": 0.04752541978428709,
+   "peak": 2.299,
+   "status": "closed",
+   "exit_reason": "trail",
+   "r_gross": 1.202,
+   "r_net": 1.202,
+   "closed": "2026-10-07T04:29:59.999000+00:00",
+   "last_checked": "2026-10-07T04:29:59.999000+00:00",
+   "bars_held": 146,
+   "id": "0010",
+   "msg_ids": {
+    "6542171685": 71,
+    "278119034": 72
+   }
   }
  ]
 }
