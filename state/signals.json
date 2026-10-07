@@ -30,8 +30,8 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-07T17:14:59.999000+00:00",
-   "bars_held": 541,
+   "last_checked": "2026-10-07T17:29:59.999000+00:00",
+   "bars_held": 542,
    "id": "0007",
    "msg_ids": {
     "6542171685": 53,
@@ -109,5 +109,7 @@
  "seq": 10,
  "last_daily": "2026-10-07",
  "macro_bias": 0,
- "event_alerts": {}
+ "event_alerts": {
+  "2026-10-07T21:00:00+03:00|USD|FOMC Meeting Minutes": "2026-10-07T17:31:00.766001+00:00"
+ }
 }
