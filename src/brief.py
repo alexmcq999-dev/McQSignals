@@ -130,7 +130,7 @@ def morning_due(now: pd.Timestamp, sig: dict, cfg: dict) -> bool:
 
 
 def morning_text(now: pd.Timestamp, cfg: dict, news_data: dict | None, crowd: list[dict], open_pub: list[dict],
-                 stats_24h: dict, stats_7d: dict, macro_state: dict | None = None) -> str:
+                 stats_24h: dict, stats_7d: dict, macro_state: dict | None = None, liq: dict | None = None) -> str:
     tz = _tz(cfg)
     local = now.tz_convert(tz)
     nd = news_data or {}
@@ -191,6 +191,13 @@ def morning_text(now: pd.Timestamp, cfg: dict, news_data: dict | None, crowd: li
     if crowd:
         day = crowd[0].get("day", "")
         p.append(f"👥 <b>Толпа на фьючерсах</b> ({day}): {crowd_line(crowd)}")
+
+    # ликвидации (оценка)
+    if liq:
+        from .liqmap import brief_line
+        lines = [x for x in (brief_line(liq, s_) for s_ in ("BTC", "ETH")) if x]
+        if lines:
+            p.append("🧲 <b>Скопления ликвидаций</b> (оценка)\n" + "\n".join(lines))
 
     # сигналы
     if open_pub:

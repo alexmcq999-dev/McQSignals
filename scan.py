@@ -14,6 +14,7 @@ import pandas as pd
 
 from src import brief as br
 from src import crowd as cw
+from src import liqmap as lm
 from src import macro as mc
 from src import news as nw
 from src import store
@@ -115,7 +116,7 @@ def _pub(t: Trade, price: float | None = None) -> dict:
 
 
 def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev, macro_state=None, crowd=None,
-               fng_value=None):
+               fng_value=None, liq=None):
     """state/app_signals.json — данные для вкладки «Сигналы» в мини-приложении marketnews999."""
     import json
 
@@ -142,6 +143,7 @@ def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_e
         "backtest": json.loads(exp.read_text()) if exp.exists() else None,
         "crowd": crowd or [],
         "fng": None if fng_value is None or pd.isna(fng_value) else int(fng_value),
+        "liqmap": liq,
     }
     (store.STATE_DIR / "app_signals.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
 
@@ -313,6 +315,13 @@ def main():
         for b_, df_ in src_.items():
             prices[b_] = float(df_["close"].iloc[-1])
     crowd_rows = br.crowd_rows(crowd_tbls, bases)
+    liq = None
+    if cfg.get("liqmap", {}).get("enabled", True):
+        try:
+            liq = lm.build_all(cfg, now, {s_: split_closed(kE[s_], now)[0] for s_ in kE}, prices)
+            log.info("Карта ликвидаций: %d монет", len(liq["symbols"]))
+        except Exception as e:  # noqa: BLE001
+            log.warning("Карта ликвидаций: %s", e)
     if br.morning_due(now, sig, cfg):
         from src.stats import summarize
 
@@ -320,7 +329,7 @@ def main():
         try:
             text = br.morning_text(now, cfg, news_data, crowd_rows, [_pub(t, prices.get(t.symbol)) for t in still_open],
                                    summarize(_closed_since(hist, 1), "r_gross"),
-                                   summarize(_closed_since(hist, 7), "r_gross"), macro_state)
+                                   summarize(_closed_since(hist, 7), "r_gross"), macro_state, liq)
             tg.broadcast(chats(), text, on_blocked=drop_chat)
             log.info("План дня отправлен")
         except Exception as e:  # noqa: BLE001
@@ -331,7 +340,7 @@ def main():
     store.save("signals", sig)
     try:
         export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo, macro_state, crowd_rows,
-                   (fng["fng"].iloc[-1] if fng is not None and len(fng) else None))
+                   (fng["fng"].iloc[-1] if fng is not None and len(fng) else None), liq)
     except Exception as e:  # noqa: BLE001
         log.warning("Экспорт для мини-приложения: %s", e)
     store.save("history", hist)

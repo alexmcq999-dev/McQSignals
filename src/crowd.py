@@ -48,8 +48,8 @@ CACHE_DIR = ROOT / ".cache" / "crowd"
 
 # ------------------------------------------------------------------ Binance metrics
 
-def _fetch_day(fsym: str, day: str) -> dict | None:
-    """Агрегат одного дня: средние ratio за день, OI на конец дня. None, если файла нет."""
+def fetch_raw(fsym: str, day: str) -> pd.DataFrame | None:
+    """Сырые 5-минутные строки metrics за день (create_time, OI, ratios). None, если файла нет."""
     try:
         r = HTTP.get(METRICS_URL.format(s=fsym, d=day), timeout=20)
     except Exception as e:  # noqa: BLE001
@@ -66,16 +66,26 @@ def _fetch_day(fsym: str, day: str) -> dict | None:
                 "create_time", "symbol", "sum_open_interest", "sum_open_interest_value",
                 "count_toptrader_long_short_ratio", "sum_toptrader_long_short_ratio",
                 "count_long_short_ratio", "sum_taker_long_short_vol_ratio"])
-        out = {}
-        for src, dst in COLS.items():
-            v = pd.to_numeric(df[src], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
-            if v.empty:
-                continue
-            out[dst] = float(v.iloc[-1]) if dst == "oi" else float(v.mean())
-        return out or None
+        return df
     except Exception as e:  # noqa: BLE001
         log.debug("metrics parse %s %s: %s", fsym, day, e)
         return None
+
+
+def _fetch_day(fsym: str, day: str) -> dict | None:
+    """Агрегат одного дня: средние ratio за день, OI на конец дня. None, если файла нет."""
+    df = fetch_raw(fsym, day)
+    if df is None:
+        return None
+    out = {}
+    for src, dst in COLS.items():
+        if src not in df:
+            continue
+        v = pd.to_numeric(df[src], errors="coerce").replace([np.inf, -np.inf], np.nan).dropna()
+        if v.empty:
+            continue
+        out[dst] = float(v.iloc[-1]) if dst == "oi" else float(v.mean())
+    return out or None
 
 
 def _load_cache(path: Path) -> dict:

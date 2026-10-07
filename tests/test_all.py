@@ -125,6 +125,9 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
     monkeypatch.setattr(config, "STATE_DIR", tmp_path)
     monkeypatch.setattr(store, "STATE_DIR", tmp_path)
     monkeypatch.setattr(data, "STATE_DIR", tmp_path)
+    from src import liqmap as lm_
+    monkeypatch.setattr(lm_, "STATE_DIR", tmp_path)
+    monkeypatch.setattr(lm_.cw, "fetch_raw", lambda fs, d: None)  # без сети
 
     # фиксированное время → детерминированный тест (не зависит от времени суток запуска)
     now = pd.Timestamp("2026-06-10 12:03", tz="UTC")
@@ -405,3 +408,25 @@ def test_brief_alerts_and_plan(cfg):
     assert br.morning_due(now, {}, cfg) and not br.morning_due(now, {"last_daily": "2026-10-08"}, cfg)
     text = br.morning_text(now, cfg, nd, [], [], {"n": 0}, {"n": 0})
     assert "План дня" in text and "Unemployment Claims" in text and "0.4%" in text
+
+
+def test_liqmap_model(cfg):
+    """Рост OI на подъёме цены → скопление лонговых ликвидаций ниже цены; пройденные уровни исчезают."""
+    from src import liqmap as lm
+
+    c = lm._cfg(cfg)
+    hours = pd.date_range("2026-10-01", periods=96, freq="1h", tz="UTC")
+    price = np.r_[np.linspace(100, 110, 48), np.full(48, 110.0)]
+    px = pd.DataFrame({"time": hours, "high": price * 1.002, "low": price * 0.998, "close": price})
+    oi = {t.strftime("%Y-%m-%dT%H"): [1e9 + i * 5e6 if i < 48 else 1e9 + 48 * 5e6, 1.5]
+          for i, t in enumerate(hours)}
+    lv = lm.build_levels(oi, px, c)
+    assert lv and all(l["usd"] > 0 for l in lv)
+    h = lm.histogram(lv, 110.0, c)
+    assert sum(h["long_usd"]) > sum(h["short_usd"])          # taker 1.5 → больше лонгов
+    assert h["clusters_below"] and all(x["price"] < 110 for x in h["clusters_below"])
+    # обвал до 90: все лонговые уровни выше 90 должны исчезнуть
+    px2 = pd.concat([px, pd.DataFrame({"time": [hours[-1] + pd.Timedelta(hours=3)], "high": [110.0], "low": [90.0],
+                                       "close": [91.0]})], ignore_index=True)
+    lv2 = lm.build_levels(oi, px2, c)
+    assert all(l["price"] < 90 for l in lv2 if l["side"] > 0)
