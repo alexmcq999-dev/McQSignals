@@ -30,50 +30,12 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-07T01:59:59.999000+00:00",
-   "bars_held": 480,
+   "last_checked": "2026-10-07T02:14:59.999000+00:00",
+   "bars_held": 481,
    "id": "0007",
    "msg_ids": {
     "6542171685": 53,
     "278119034": 54
-   }
-  },
-  {
-   "symbol": "NEAR",
-   "side": 1,
-   "entry": 5.167,
-   "sl": 4.916577750074208,
-   "tp1": 5.542633374888688,
-   "tp2": 5.918266749777375,
-   "risk": 0.2504222499257918,
-   "opened": "2026-10-05T07:59:59.999000+00:00",
-   "conf": 74.1,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "donchian",
-    "squeeze",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.0309,
-   "atr": 0.10016889997031672,
-   "peak": 5.37,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-07T01:59:59.999000+00:00",
-   "bars_held": 168,
-   "id": "0009",
-   "msg_ids": {
-    "6542171685": 67,
-    "278119034": 68
    }
   },
   {
@@ -106,8 +68,8 @@
    "r_gross": 0.75,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-07T01:59:59.999000+00:00",
-   "bars_held": 136,
+   "last_checked": "2026-10-07T02:14:59.999000+00:00",
+   "bars_held": 137,
    "id": "0010",
    "msg_ids": {
     "6542171685": 71,
