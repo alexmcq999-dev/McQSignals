@@ -1,44 +1,5 @@
 {
- "open": [
-  {
-   "symbol": "ONDO",
-   "side": -1,
-   "entry": 0.4424,
-   "sl": 0.468944,
-   "tp1": 0.402584,
-   "tp2": 0.36276800000000003,
-   "risk": 0.026543999999999998,
-   "opened": "2026-10-08T15:59:59.999000+00:00",
-   "conf": 75.3,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "stoch_rsi",
-    "donchian",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.025,
-   "atr": 0.011366954790048484,
-   "peak": 0.4395,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-08T18:14:59.999000+00:00",
-   "bars_held": 9,
-   "id": "0011",
-   "msg_ids": {
-    "6542171685": 91,
-    "278119034": 92
-   }
-  }
- ],
+ "open": [],
  "last_bar": {
   "BTC": "2026-10-08T17:59:59.999000+00:00",
   "ETH": "2026-10-08T17:59:59.999000+00:00",
