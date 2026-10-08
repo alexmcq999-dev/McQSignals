@@ -1,44 +1,5 @@
 {
- "open": [
-  {
-   "symbol": "AAVE",
-   "side": 1,
-   "entry": 176.21,
-   "sl": 167.6721533532035,
-   "tp1": 189.0167699701948,
-   "tp2": 201.82353994038957,
-   "risk": 8.537846646796522,
-   "opened": "2026-10-02T01:59:59.999000+00:00",
-   "conf": 71.8,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "donchian",
-    "squeeze",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.031,
-   "atr": 3.4151386587186088,
-   "peak": 187.59,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-08T15:14:59.999000+00:00",
-   "bars_held": 629,
-   "id": "0007",
-   "msg_ids": {
-    "6542171685": 53,
-    "278119034": 54
-   }
-  }
- ],
+ "open": [],
  "last_bar": {
   "BTC": "2026-10-08T14:59:59.999000+00:00",
   "ETH": "2026-10-08T14:59:59.999000+00:00",
