@@ -1,183 +1,183 @@
 {
- "updated": "2026-10-10T13:31:05+00:00",
+ "updated": "2026-10-11T01:46:05+00:00",
  "v": 2,
- "updated_ts": 1791639065.9972086,
+ "updated_ts": 1791683165.8481467,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1663775262587,
-   "qvol": 823178115.4599386
+   "mcap": 1667073491375,
+   "qvol": 565943972.5074586
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 304927785742,
-   "qvol": 270023802.552559
+   "mcap": 306178655894,
+   "qvol": 326934681.892801
   },
   {
    "base": "NEAR",
    "name": "NEAR Protocol",
-   "mcap": 6958496965,
-   "qvol": 134450158.2265
+   "mcap": 6969449731,
+   "qvol": 135486263.8631
   },
   {
    "base": "SOL",
    "name": "Solana",
-   "mcap": 64649039003,
-   "qvol": 131984972.95969
-  },
-  {
-   "base": "ZEC",
-   "name": "Zcash",
-   "mcap": 20838492998,
-   "qvol": 95645528.11819
-  },
-  {
-   "base": "XRP",
-   "name": "XRP",
-   "mcap": 88602624597,
-   "qvol": 79962808.10453
-  },
-  {
-   "base": "SUI",
-   "name": "Sui",
-   "mcap": 4577296513,
-   "qvol": 51629796.50616
-  },
-  {
-   "base": "BNB",
-   "name": "BNB",
-   "mcap": 99723191873,
-   "qvol": 49119648.28214
-  },
-  {
-   "base": "WLD",
-   "name": "Worldcoin",
-   "mcap": 2071460291,
-   "qvol": 42692972.67862
-  },
-  {
-   "base": "UNI",
-   "name": "Uniswap",
-   "mcap": 4732637263,
-   "qvol": 40324461.45503
-  },
-  {
-   "base": "ADA",
-   "name": "Cardano",
-   "mcap": 9574941782,
-   "qvol": 39767872.79355
-  },
-  {
-   "base": "DOGE",
-   "name": "Dogecoin",
-   "mcap": 13412121448,
-   "qvol": 31291607.17336
-  },
-  {
-   "base": "ENA",
-   "name": "Ethena",
-   "mcap": 2950963570,
-   "qvol": 29094486.922451
+   "mcap": 64824707118,
+   "qvol": 97013602.11928
   },
   {
    "base": "STRK",
    "name": "Starknet",
-   "mcap": 536079992,
-   "qvol": 25504572.5239737
+   "mcap": 859995067,
+   "qvol": 84032243.3214604
   },
   {
-   "base": "AVAX",
-   "name": "Avalanche",
-   "mcap": 4656017098,
-   "qvol": 25456386.84398
+   "base": "ZEC",
+   "name": "Zcash",
+   "mcap": 20852259933,
+   "qvol": 61717792.65448
   },
   {
-   "base": "ONDO",
-   "name": "Ondo",
-   "mcap": 2423819165,
-   "qvol": 21761445.04821
+   "base": "XRP",
+   "name": "XRP",
+   "mcap": 88349467298,
+   "qvol": 51693401.63411
   },
   {
-   "base": "TRX",
-   "name": "TRON",
-   "mcap": 31451194108,
-   "qvol": 21626955.91689
+   "base": "SUI",
+   "name": "Sui",
+   "mcap": 4582202089,
+   "qvol": 49477921.53396
   },
   {
-   "base": "ATOM",
-   "name": "Cosmos Hub",
-   "mcap": 1033432226,
-   "qvol": 21566075.02107
+   "base": "WLD",
+   "name": "Worldcoin",
+   "mcap": 2144199417,
+   "qvol": 48164929.30055
   },
   {
-   "base": "KAIA",
-   "name": "Kaia",
-   "mcap": 360769144,
-   "qvol": 21541854.37272
+   "base": "UNI",
+   "name": "Uniswap",
+   "mcap": 4756193401,
+   "qvol": 44013399.32675
   },
   {
-   "base": "PUMP",
-   "name": "Pump.fun",
-   "mcap": 2597006559,
-   "qvol": 20278146.49987
+   "base": "BNB",
+   "name": "BNB",
+   "mcap": 99665887989,
+   "qvol": 42609314.77119
   },
   {
-   "base": "FET",
-   "name": "Artificial Superintelligence Alliance",
-   "mcap": 520585595,
-   "qvol": 20094450.25237
+   "base": "ADA",
+   "name": "Cardano",
+   "mcap": 9347389429,
+   "qvol": 37012810.60717
   },
   {
-   "base": "AAVE",
-   "name": "Aave",
-   "mcap": 2661616884,
-   "qvol": 19473176.63851
+   "base": "CFX",
+   "name": "Conflux",
+   "mcap": 324979031,
+   "qvol": 27580021.40478
   },
   {
-   "base": "BAT",
-   "name": "Basic Attention",
-   "mcap": 194275463,
-   "qvol": 19336325.9693
+   "base": "ENA",
+   "name": "Ethena",
+   "mcap": 2990221005,
+   "qvol": 25168516.263004
+  },
+  {
+   "base": "DOGE",
+   "name": "Dogecoin",
+   "mcap": 13438154647,
+   "qvol": 24856984.10386
+  },
+  {
+   "base": "TIA",
+   "name": "Celestia",
+   "mcap": 599893463,
+   "qvol": 22287585.318869
   },
   {
    "base": "QNT",
    "name": "Quant",
-   "mcap": 3648006293,
-   "qvol": 19303979.02521
+   "mcap": 3472677484,
+   "qvol": 21198193.93738
   },
   {
-   "base": "OP",
-   "name": "Optimism",
-   "mcap": 312373924,
-   "qvol": 18239761.938501
+   "base": "FET",
+   "name": "Artificial Superintelligence Alliance",
+   "mcap": 522288233,
+   "qvol": 20030305.51007
+  },
+  {
+   "base": "AVAX",
+   "name": "Avalanche",
+   "mcap": 4601738504,
+   "qvol": 19459515.74343
+  },
+  {
+   "base": "AAVE",
+   "name": "Aave",
+   "mcap": 2612930181,
+   "qvol": 18670077.03779
+  },
+  {
+   "base": "ONDO",
+   "name": "Ondo",
+   "mcap": 2401728148,
+   "qvol": 18631322.28773
   },
   {
    "base": "FIL",
    "name": "Filecoin",
-   "mcap": 932879531,
-   "qvol": 17589896.01658
-  },
-  {
-   "base": "DOT",
-   "name": "Polkadot",
-   "mcap": 2131397009,
-   "qvol": 17262928.67227
+   "mcap": 935397188,
+   "qvol": 17823601.840961
   },
   {
    "base": "HYPE",
    "name": "Hyperliquid",
-   "mcap": 18736867316,
-   "qvol": 16396557.76854
+   "mcap": 19016868397,
+   "qvol": 17812773.59728
+  },
+  {
+   "base": "CHIP",
+   "name": "USD.AI",
+   "mcap": 142086676,
+   "qvol": 17507911.53131
   },
   {
    "base": "TAO",
    "name": "Bittensor",
-   "mcap": 3197872747,
-   "qvol": 16092704.13196
+   "mcap": 3234912066,
+   "qvol": 16428985.39575
+  },
+  {
+   "base": "APT",
+   "name": "Aptos",
+   "mcap": 766507268,
+   "qvol": 15605007.683967
+  },
+  {
+   "base": "OP",
+   "name": "Optimism",
+   "mcap": 325465079,
+   "qvol": 15474830.65672
+  },
+  {
+   "base": "ATOM",
+   "name": "Cosmos Hub",
+   "mcap": 1052447589,
+   "qvol": 15312268.33913
+  },
+  {
+   "base": "TRX",
+   "name": "TRON",
+   "mcap": 31388653278,
+   "qvol": 15202025.56319
   }
  ]
 }
