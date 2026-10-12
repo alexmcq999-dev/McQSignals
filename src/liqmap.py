@@ -61,8 +61,16 @@ def update_oi(bases: list[str], now: pd.Timestamp, days: int, fsyms: dict[str, s
     except json.JSONDecodeError:
         cache = {}
     want = cw.recent_days(now, days)
+    final_edge = (now.floor("D") - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
+    if cache.get("_v") != 2:  # v1 помечал свежие дни отсутствующими навсегда — сбрасываем отметки
+        for ent in cache.values():
+            if isinstance(ent, dict):
+                ent["missing"] = []
+        cache["_v"] = 2
     jobs = []
     for b in bases:
+        if b == "_v":
+            continue
         fs = fsyms.get(b) or f"{b}USDT"
         ent = cache.setdefault(b, {"fsym": fs, "days": [], "missing": [], "h": {}})
         ent["fsym"] = fs
@@ -77,16 +85,19 @@ def update_oi(bases: list[str], now: pd.Timestamp, days: int, fsyms: dict[str, s
         with ThreadPoolExecutor(12) as ex:
             for b, d, df in ex.map(one, jobs):
                 if df is None or "sum_open_interest_value" not in df:
-                    cache[b]["missing"].append(d)
+                    if d <= final_edge:  # свежий день мог быть ещё не опубликован — повторим позже
+                        cache[b]["missing"].append(d)
                     continue
                 cache[b]["h"].update(_hourly(df))
                 cache[b]["days"].append(d)
     edge = (now - pd.Timedelta(days=days + 1)).strftime("%Y-%m-%dT%H")
     for b, ent in cache.items():
+        if not isinstance(ent, dict) or "h" not in ent:
+            continue
         ent["h"] = {k: v for k, v in sorted(ent["h"].items()) if k >= edge}
         ent["days"] = sorted(d for d in ent["days"] if d in want)
         ent["missing"] = [d for d in ent["missing"] if d in want][-days:]
-    cache = {b: v for b, v in cache.items() if b in bases}
+    cache = {b: v for b, v in cache.items() if b in bases or b == "_v"}
     STATE_DIR.mkdir(exist_ok=True)
     path.write_text(json.dumps(cache, separators=(",", ":")))
     return cache

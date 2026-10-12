@@ -430,3 +430,20 @@ def test_liqmap_model(cfg):
                                        "close": [91.0]})], ignore_index=True)
     lv2 = lm.build_levels(oi, px2, c)
     assert all(l["price"] < 90 for l in lv2 if l["side"] > 0)
+
+
+def test_crowd_recent_days_are_retried(tmp_path, monkeypatch):
+    """Файл за вчера ещё не опубликован → день НЕ помечается отсутствующим и докачивается позже."""
+    from src import crowd as cw_
+
+    today = pd.Timestamp.now(tz="UTC").floor("D")
+    days = [(today - pd.Timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, 0, -1)]
+    published = set(days[:-1])  # вчерашнего файла пока нет
+    monkeypatch.setattr(cw_, "_fetch_day", lambda fs, d: {"ls_acc": 1.5, "ls_top": 1.0, "taker": 1.0, "oi": 1e8}
+                        if d in published else None)
+    path = tmp_path / "crowd.json"
+    c1 = cw_.fetch_metrics(["NEAR"], days, path, workers=2)
+    assert days[-1] not in c1["NEAR"]["days"] and days[-1] not in c1["_missing"].get("NEAR", [])
+    published.add(days[-1])                      # файл появился
+    c2 = cw_.fetch_metrics(["NEAR"], days, path, workers=2)
+    assert days[-1] in c2["NEAR"]["days"]

@@ -99,7 +99,12 @@ def fetch_metrics(bases: list[str], days: list[str], cache_path: Path | None = N
     """{base: {"fsym": ..., "days": {YYYY-MM-DD: {...}}}} — докачивает только недостающие дни."""
     cache_path = cache_path or (STATE_DIR / "crowd.json")
     cache = _load_cache(cache_path)
-    missing_ok = cache.setdefault("_missing", {})  # дни, которых нет на сервере (не перекачиваем)
+    if cache.get("_v") != 2:  # v1 помечал «отсутствующими» дни, запрошенные до публикации файла, — сбрасываем
+        cache["_missing"] = {}
+        cache["_v"] = 2
+    missing_ok = cache.setdefault("_missing", {})  # дни, которых точно нет на сервере (не перекачиваем)
+    # Файл за день публикуется на следующий день с задержкой: свежие дни пробуем снова на следующих запусках
+    final_edge = (pd.Timestamp.now(tz="UTC").floor("D") - pd.Timedelta(days=3)).strftime("%Y-%m-%d")
     jobs = []
     for b in bases:
         ent = cache.setdefault(b, {"fsym": None, "days": {}})
@@ -125,14 +130,15 @@ def fetch_metrics(bases: list[str], days: list[str], cache_path: Path | None = N
         with ThreadPoolExecutor(workers) as ex:
             for b, d, v in ex.map(one, jobs):
                 if v is None:
-                    missing_ok.setdefault(b, []).append(d)
+                    if d <= final_edge:
+                        missing_ok.setdefault(b, []).append(d)
                 else:
                     cache[b]["days"][d] = v
     # в state держим только нужное окно, в .cache — всё
     keep = set(days)
     if cache_path.parent == STATE_DIR:
         for b, ent in cache.items():
-            if b != "_missing":
+            if b not in ("_missing", "_v"):
                 ent["days"] = {d: v for d, v in ent["days"].items() if d in keep}
         cache["_missing"] = {b: [d for d in v if d in keep] for b, v in missing_ok.items()}
     cache_path.parent.mkdir(parents=True, exist_ok=True)
