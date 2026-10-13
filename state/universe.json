@@ -1,231 +1,267 @@
 {
- "updated": "2026-10-12T14:16:07+00:00",
+ "updated": "2026-10-13T02:31:06+00:00",
  "v": 2,
- "updated_ts": 1791814567.0565393,
+ "updated_ts": 1791858666.6294763,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1667406182728,
-   "qvol": 1052537740.5988444
+   "mcap": 1661325366451,
+   "qvol": 1204577658.928172
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 309993944091,
-   "qvol": 736197483.815018
-  },
-  {
-   "base": "NEAR",
-   "name": "NEAR Protocol",
-   "mcap": 7385856778,
-   "qvol": 258368732.312
+   "mcap": 302741013472,
+   "qvol": 841401740.937894
   },
   {
    "base": "SOL",
    "name": "Solana",
-   "mcap": 64906382369,
-   "qvol": 194492418.24668
+   "mcap": 62660349776,
+   "qvol": 296491072.3067
+  },
+  {
+   "base": "NEAR",
+   "name": "NEAR Protocol",
+   "mcap": 6870694342,
+   "qvol": 265732592.8855
   },
   {
    "base": "ZEC",
    "name": "Zcash",
-   "mcap": 21943993015,
-   "qvol": 168630173.8912
+   "mcap": 20280174612,
+   "qvol": 208592382.82757
   },
   {
    "base": "XRP",
    "name": "XRP",
-   "mcap": 87849258538,
-   "qvol": 111889008.46249
-  },
-  {
-   "base": "STRK",
-   "name": "Starknet",
-   "mcap": 687647487,
-   "qvol": 77596759.0178899
+   "mcap": 85787610314,
+   "qvol": 163451548.2791
   },
   {
    "base": "BNB",
    "name": "BNB",
-   "mcap": 99618549122,
-   "qvol": 74696439.73972
+   "mcap": 98348170291,
+   "qvol": 89792062.2918
   },
   {
    "base": "SUI",
    "name": "Sui",
-   "mcap": 4550515019,
-   "qvol": 67654453.85537
-  },
-  {
-   "base": "ENA",
-   "name": "Ethena",
-   "mcap": 3076506359,
-   "qvol": 60712476.956227
-  },
-  {
-   "base": "W",
-   "name": "Wormhole",
-   "mcap": 169082704,
-   "qvol": 60617180.409944
-  },
-  {
-   "base": "S",
-   "name": "Sonic",
-   "mcap": 237009778,
-   "qvol": 48902310.23232
-  },
-  {
-   "base": "UNI",
-   "name": "Uniswap",
-   "mcap": 4710311355,
-   "qvol": 46352953.35664
+   "mcap": 4282049611,
+   "qvol": 74756612.86867
   },
   {
    "base": "DOGE",
    "name": "Dogecoin",
-   "mcap": 13439797484,
-   "qvol": 45541378.17795
+   "mcap": 13012121258,
+   "qvol": 74371293.53427
   },
   {
-   "base": "AVAX",
-   "name": "Avalanche",
-   "mcap": 4813386169,
-   "qvol": 41842703.99907
+   "base": "ENA",
+   "name": "Ethena",
+   "mcap": 2781133040,
+   "qvol": 64801944.157458
+  },
+  {
+   "base": "STRK",
+   "name": "Starknet",
+   "mcap": 666737700,
+   "qvol": 63418451.7431903
+  },
+  {
+   "base": "W",
+   "name": "Wormhole",
+   "mcap": 131531057,
+   "qvol": 56750480.347637
+  },
+  {
+   "base": "UNI",
+   "name": "Uniswap",
+   "mcap": 4458098100,
+   "qvol": 52369387.72831
   },
   {
    "base": "WLD",
    "name": "Worldcoin",
-   "mcap": 2035054798,
-   "qvol": 41519712.65087
+   "mcap": 1927150764,
+   "qvol": 45911576.81337
   },
   {
-   "base": "ONDO",
-   "name": "Ondo",
-   "mcap": 2469043567,
-   "qvol": 38558549.87823
-  },
-  {
-   "base": "TAO",
-   "name": "Bittensor",
-   "mcap": 3292503802,
-   "qvol": 36254514.72599
-  },
-  {
-   "base": "FIL",
-   "name": "Filecoin",
-   "mcap": 1018158958,
-   "qvol": 34565505.435655
-  },
-  {
-   "base": "PEPE",
-   "name": "Pepe",
-   "mcap": 1755301461,
-   "qvol": 29866136.41756534
-  },
-  {
-   "base": "RSR",
-   "name": "Reserve Rights",
-   "mcap": 154911818,
-   "qvol": 29550245.8859783
-  },
-  {
-   "base": "PUMP",
-   "name": "Pump.fun",
-   "mcap": 2596077884,
-   "qvol": 29127263.39737
+   "base": "AVAX",
+   "name": "Avalanche",
+   "mcap": 4563754620,
+   "qvol": 45419823.1471
   },
   {
    "base": "ADA",
    "name": "Cardano",
-   "mcap": 9302844223,
-   "qvol": 26545138.82414
+   "mcap": 8789637454,
+   "qvol": 39070130.96687
   },
   {
-   "base": "APT",
-   "name": "Aptos",
-   "mcap": 752724676,
-   "qvol": 26014739.485154
+   "base": "RSR",
+   "name": "Reserve Rights",
+   "mcap": 126792273,
+   "qvol": 37967831.1736282
   },
   {
-   "base": "TRX",
-   "name": "TRON",
-   "mcap": 31463767516,
-   "qvol": 25963456.28937
+   "base": "TAO",
+   "name": "Bittensor",
+   "mcap": 3113684362,
+   "qvol": 37812277.54817
+  },
+  {
+   "base": "PUMP",
+   "name": "Pump.fun",
+   "mcap": 2311464761,
+   "qvol": 35640517.518429
+  },
+  {
+   "base": "ONDO",
+   "name": "Ondo",
+   "mcap": 2317354772,
+   "qvol": 35461051.62621
   },
   {
    "base": "ZRO",
    "name": "LayerZero",
-   "mcap": 952740227,
-   "qvol": 25794668.15719
+   "mcap": 830240957,
+   "qvol": 34828582.92486
   },
   {
-   "base": "FET",
-   "name": "Artificial Superintelligence Alliance",
-   "mcap": 527183624,
-   "qvol": 25310568.97781
-  },
-  {
-   "base": "U",
-   "name": "United Stables",
-   "mcap": 1555649611,
-   "qvol": 24535299.8618
-  },
-  {
-   "base": "LINK",
-   "name": "Chainlink",
-   "mcap": 10108211478,
-   "qvol": 24123708.40127
+   "base": "PEPE",
+   "name": "Pepe",
+   "mcap": 1667784282,
+   "qvol": 34603334.27247388
   },
   {
    "base": "HYPE",
    "name": "Hyperliquid",
-   "mcap": 19000207124,
-   "qvol": 22946267.63879
+   "mcap": 18226821881,
+   "qvol": 31042841.84325
   },
   {
-   "base": "QNT",
-   "name": "Quant",
-   "mcap": 3334895651,
-   "qvol": 20931520.23318
+   "base": "LINK",
+   "name": "Chainlink",
+   "mcap": 9790520408,
+   "qvol": 30427573.67771
+  },
+  {
+   "base": "U",
+   "name": "United Stables",
+   "mcap": 1557832965,
+   "qvol": 29361516.0507
+  },
+  {
+   "base": "TRX",
+   "name": "TRON",
+   "mcap": 31301898748,
+   "qvol": 28407388.29444
+  },
+  {
+   "base": "FIL",
+   "name": "Filecoin",
+   "mcap": 936144056,
+   "qvol": 26617195.305915
+  },
+  {
+   "base": "FET",
+   "name": "Artificial Superintelligence Alliance",
+   "mcap": 491241044,
+   "qvol": 25810140.08612
   },
   {
    "base": "LTC",
    "name": "Litecoin",
-   "mcap": 4973668986,
-   "qvol": 18866104.69701
+   "mcap": 4774107772,
+   "qvol": 25037402.10487
   },
   {
-   "base": "ICP",
-   "name": "Internet Computer",
-   "mcap": 1874536785,
-   "qvol": 18432656.31241
-  },
-  {
-   "base": "PLUME",
-   "name": "Plume",
-   "mcap": 140273046,
-   "qvol": 17304736.93572
+   "base": "QNT",
+   "name": "Quant",
+   "mcap": 3312273773,
+   "qvol": 22751252.63915
   },
   {
    "base": "AAVE",
    "name": "Aave",
-   "mcap": 2546910598,
-   "qvol": 16492552.55133
+   "mcap": 2428614665,
+   "qvol": 20267333.69004
   },
   {
    "base": "POL",
    "name": "POL (ex-MATIC)",
-   "mcap": 1119308530,
-   "qvol": 15919832.000112
+   "mcap": 1074394631,
+   "qvol": 19634645.190703
   },
   {
-   "base": "CFX",
-   "name": "Conflux",
-   "mcap": 324628137,
-   "qvol": 15437323.63978
+   "base": "BCH",
+   "name": "Bitcoin Cash",
+   "mcap": 5380796004,
+   "qvol": 19245870.3685
+  },
+  {
+   "base": "S",
+   "name": "Sonic",
+   "mcap": 227815423,
+   "qvol": 18609585.623549
+  },
+  {
+   "base": "PYTH",
+   "name": "Pyth Network",
+   "mcap": 660295932,
+   "qvol": 18595664.191879
+  },
+  {
+   "base": "HBAR",
+   "name": "Hedera",
+   "mcap": 3839980965,
+   "qvol": 18108259.87315
+  },
+  {
+   "base": "APT",
+   "name": "Aptos",
+   "mcap": 711446307,
+   "qvol": 18035778.117221
+  },
+  {
+   "base": "INJ",
+   "name": "Injective",
+   "mcap": 736677413,
+   "qvol": 17550781.22537
+  },
+  {
+   "base": "RENDER",
+   "name": "Render",
+   "mcap": 1101803658,
+   "qvol": 17338426.15641
+  },
+  {
+   "base": "DOT",
+   "name": "Polkadot",
+   "mcap": 1965223744,
+   "qvol": 16266900.79663
+  },
+  {
+   "base": "TRUMP",
+   "name": "Official Trump",
+   "mcap": 532207717,
+   "qvol": 15735577.445569
+  },
+  {
+   "base": "ARB",
+   "name": "Arbitrum",
+   "mcap": 1244550063,
+   "qvol": 15361428.95419
+  },
+  {
+   "base": "ICP",
+   "name": "Internet Computer",
+   "mcap": 1735320898,
+   "qvol": 15008418.90585
   }
  ]
 }
