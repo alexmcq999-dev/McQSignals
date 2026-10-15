@@ -1,44 +1,6 @@
 {
  "open": [
   {
-   "symbol": "HYPE",
-   "side": -1,
-   "entry": 80.35,
-   "sl": 82.3099748356505,
-   "tp1": 77.41003774652424,
-   "tp2": 74.47007549304848,
-   "risk": 1.9599748356505042,
-   "opened": "2026-10-14T13:59:59.999000+00:00",
-   "conf": 75.3,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "donchian",
-    "squeeze",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.0615,
-   "atr": 0.7839899342602017,
-   "peak": 77.56,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-15T20:29:59.999000+00:00",
-   "bars_held": 122,
-   "id": "0013",
-   "msg_ids": {
-    "6542171685": 121,
-    "278119034": 122
-   }
-  },
-  {
    "symbol": "PYTH",
    "side": 1,
    "entry": 0.09739,
@@ -69,8 +31,8 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-15T20:29:59.999000+00:00",
-   "bars_held": 18,
+   "last_checked": "2026-10-15T20:44:59.999000+00:00",
+   "bars_held": 19,
    "id": "0014",
    "msg_ids": {
     "6542171685": 135,
@@ -107,8 +69,8 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-15T20:29:59.999000+00:00",
-   "bars_held": 18,
+   "last_checked": "2026-10-15T20:44:59.999000+00:00",
+   "bars_held": 19,
    "id": "0015",
    "msg_ids": {
     "6542171685": 137,
