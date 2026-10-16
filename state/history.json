@@ -477,6 +477,44 @@
     "6542171685": 121,
     "278119034": 122
    }
+  },
+  {
+   "symbol": "ZK",
+   "side": 1,
+   "entry": 0.01766,
+   "sl": 0.016600399999999998,
+   "tp1": 0.0192494,
+   "tp2": 0.020838799999999998,
+   "risk": 0.0010596,
+   "opened": "2026-10-15T15:59:59.999000+00:00",
+   "conf": 73.1,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "pullback",
+    "macd",
+    "rsi_regime",
+    "stoch_rsi",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.025,
+   "atr": 0.0007653283984662958,
+   "peak": 0.01829,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-10-16T01:29:59.999000+00:00",
+   "last_checked": "2026-10-16T01:29:59.999000+00:00",
+   "bars_held": 38,
+   "id": "0015",
+   "msg_ids": {
+    "6542171685": 137,
+    "278119034": 138
+   }
   }
  ]
 }
