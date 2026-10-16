@@ -515,6 +515,45 @@
     "6542171685": 137,
     "278119034": 138
    }
+  },
+  {
+   "symbol": "PYTH",
+   "side": 1,
+   "entry": 0.09739,
+   "sl": 0.0915466,
+   "tp1": 0.1061551,
+   "tp2": 0.1149202,
+   "risk": 0.005843400000000001,
+   "opened": "2026-10-15T15:59:59.999000+00:00",
+   "conf": 86.7,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "stoch_rsi",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.025,
+   "atr": 0.004167086469968273,
+   "peak": 0.09917,
+   "status": "closed",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-10-16T10:29:59.999000+00:00",
+   "last_checked": "2026-10-16T10:29:59.999000+00:00",
+   "bars_held": 74,
+   "id": "0014",
+   "msg_ids": {
+    "6542171685": 135,
+    "278119034": 136
+   }
   }
  ]
 }

@@ -1,45 +1,5 @@
 {
- "open": [
-  {
-   "symbol": "PYTH",
-   "side": 1,
-   "entry": 0.09739,
-   "sl": 0.0915466,
-   "tp1": 0.1061551,
-   "tp2": 0.1149202,
-   "risk": 0.005843400000000001,
-   "opened": "2026-10-15T15:59:59.999000+00:00",
-   "conf": 86.7,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "stoch_rsi",
-    "donchian",
-    "squeeze",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.025,
-   "atr": 0.004167086469968273,
-   "peak": 0.09917,
-   "status": "open",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-16T10:14:59.999000+00:00",
-   "bars_held": 73,
-   "id": "0014",
-   "msg_ids": {
-    "6542171685": 135,
-    "278119034": 136
-   }
-  }
- ],
+ "open": [],
  "last_bar": {
   "BTC": "2026-10-16T09:59:59.999000+00:00",
   "ETH": "2026-10-16T09:59:59.999000+00:00",
