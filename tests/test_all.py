@@ -290,7 +290,10 @@ def test_default_config_is_v32(cfg):
     assert cfg["contrarian"]["crowd_filter"] is True
     assert cfg["contrarian"]["fng_filter"] is True  # v3.3
     assert cfg["timeframes"]["entry"] == "1h" and cfg["risk"]["exit_mode"] == "trail"
-    assert cfg["signals"]["htf_mode"] == "loose" and cfg["costs"]["fee_pct"] == 0.045
+    assert cfg["costs"]["fee_pct"] == 0.045
+    live = load_config()  # v4.1: строгий тренд — единственный вариант ✅ во всех периодах
+    assert live["strategy"]["mode"] == "trend" and live["signals"]["htf_mode"] == "strict"
+    assert live["signals"]["btc_mode"] == "block" and live["signals"]["strict_shorts"] is True
     assert cfg["macro"]["mode"] == "shadow"  # макро-фильтр пока только наблюдает
 
 
@@ -462,6 +465,8 @@ def test_crowd_recent_days_are_retried(tmp_path, monkeypatch):
 
 # ------------------------------------------------------------------ v4: пробойные сетапы
 
+BO = {"strategy": {"mode": "breakout"}}
+
 def _bo_frame(cfg_, retest=False, short=False):
     from synth import breakout_pattern, mirror
     from src.engine import score_frame
@@ -476,8 +481,7 @@ def _bo_frame(cfg_, retest=False, short=False):
 @pytest.mark.parametrize("short", [False, True])
 def test_breakout_detects_textbook_pattern(short):
     """Восходящий треугольник (и его зеркало) → предупреждение до пробоя и сигнал на свече пробоя."""
-    c = load_config()
-    assert c["strategy"]["mode"] == "breakout"
+    c = load_config(overrides=BO)
     o, i, _ = _bo_frame(c, short=short)
     side = -1 if short else 1
     sig = np.flatnonzero(o["signal"].to_numpy() != 0)
@@ -491,7 +495,7 @@ def test_breakout_detects_textbook_pattern(short):
     assert (t.sl < lvl < t.entry < t.tp1) if side > 0 else (t.sl > lvl > t.entry > t.tp1)
     assert side * (t.target - lvl) > 0 and "3 касания уровня" in t.notes
     # строже порог → сигнала нет (слабые и средние сетапы пропускаются)
-    o2, _, _ = _bo_frame(load_config(overrides={"breakout": {"min_score": 95}}), short=short)
+    o2, _, _ = _bo_frame(load_config(overrides={"strategy": {"mode": "breakout"}, "breakout": {"min_score": 95}}), short=short)
     assert (o2["signal"] == 0).all()
 
 
@@ -500,7 +504,7 @@ def test_breakout_no_lookahead():
     from src.engine import score_frame
     from src.strategies import build_features
 
-    c = load_config()
+    c = load_config(overrides=BO)
     df, i = breakout_pattern()
     full = score_frame(build_features(df, resample(df, "4h"), None), c, is_btc=True)
     cols = ["signal", "conf", "bo_armed", "bo_level", "bo_stop", "bo_pre"]
@@ -513,7 +517,7 @@ def test_breakout_no_lookahead():
 
 
 def test_breakout_far_close_gives_retest_limit():
-    c = load_config()
+    c = load_config(overrides=BO)
     o, i, df = _bo_frame(c, retest=True)
     row = o.iloc[i]
     assert row["signal"] == 1 and pd.notna(row["bo_limit"])
@@ -528,7 +532,7 @@ def test_breakout_far_close_gives_retest_limit():
             break
     assert evs[0] == "filled" and t.filled
     # режим market — без лимита
-    om, _, _ = _bo_frame(load_config(overrides={"breakout": {"entry_mode": "market"}}), retest=True)
+    om, _, _ = _bo_frame(load_config(overrides={"strategy": {"mode": "breakout"}, "breakout": {"entry_mode": "market"}}), retest=True)
     assert make_trade(om.iloc[i], 1, "X", c).status == "open"
 
 
@@ -568,7 +572,7 @@ def test_pending_fill_expire_and_stats(cfg):
 def test_breakout_texts():
     from src.telegram import breakout_text, event_text, setup_alert_text
 
-    c = load_config()
+    c = load_config(overrides=BO)
     o, i, _ = _bo_frame(c, retest=True)
     row = o.iloc[i]
     t = make_trade(row, 1, "AVAX", c)
@@ -588,7 +592,7 @@ def test_backtest_breakout_and_replay(tmp_path, monkeypatch):
     import backtest
     from synth import breakout_pattern
 
-    c = load_config(overrides={"risk": {"ttl_hours": 24}})  # чтобы сделка успела закрыться на коротких данных
+    c = load_config(overrides={"strategy": {"mode": "breakout"}, "risk": {"ttl_hours": 24}})  # чтобы сделка успела закрыться на коротких данных
     df, i = breakout_pattern(retest=True, after=40)
     f = backtest.prepare({"X": (df, resample(df, "4h"), None)}, resample(df, "4h"))  # BTC 4H тоже бычий
     tr = backtest.run(f, c, df["close_time"].iloc[0])
@@ -616,6 +620,8 @@ def test_scan_breakout_alert_then_signal(monkeypatch, tmp_path, capsys):
     t_bo = pat["close_time"].iloc[i] + pd.Timedelta(minutes=3)
 
     scan, store = _scan_env(monkeypatch, tmp_path, t_arm, {}, hourly={"PAT": pat.iloc[:i - 2], "BTC": btc})
+    orig = scan.load_config
+    monkeypatch.setattr(scan, "load_config", lambda: orig(overrides=BO))
     scan.main()
     out = capsys.readouterr().out
     assert "Готовится пробой" in out and "PAT" in out
@@ -624,6 +630,7 @@ def test_scan_breakout_alert_then_signal(monkeypatch, tmp_path, capsys):
     assert not store.load("signals")["open"]
 
     scan, store = _scan_env(monkeypatch, tmp_path, t_bo, {}, hourly={"PAT": pat.iloc[:i + 1], "BTC": btc})
+    monkeypatch.setattr(scan, "load_config", lambda: orig(overrides=BO))
     scan.main()
     out = capsys.readouterr().out
     assert "Пробой" in out and "PAT/USDT" in out and "Готовится пробой" not in out
@@ -633,3 +640,25 @@ def test_scan_breakout_alert_then_signal(monkeypatch, tmp_path, capsys):
     assert app["open"][0]["level"] == pytest.approx(105.0) and app["open"][0]["reasons"]
     scan.main()  # повторный прогон — без дублей
     assert len(store.load("signals")["open"]) == 1
+
+
+def test_trend_pullback_limit(cfg):
+    """v4.1: трендовый сигнал с entry_mode=pullback — лимит на откат, а не покупка закрытия свечи."""
+    from src.telegram import signal_text
+
+    pb = load_config(overrides={"strategy": {"mode": "trend"},
+                                "signals": {"entry_mode": "pullback", "pullback_atr": 0.5, "pullback_bars": 6}})
+    btc = resample(synth(3000, seed=999))
+    d = synth(3000, seed=2)
+    o = analyze(d, resample(d), btc, pb)
+    i = np.flatnonzero(o.signal.to_numpy() != 0)[0]
+    row = o.iloc[i]
+    side = int(row.signal)
+    t = make_trade(row, side, "X", pb)
+    assert t.status == "pending" and t.entry == pytest.approx(row.close - side * 0.5 * row.atr)
+    assert (t.sl < t.entry < t.tp1) if side > 0 else (t.sl > t.entry > t.tp1)
+    assert pd.Timestamp(t.expires) == pd.Timestamp(row.close_time) + pd.Timedelta(hours=6)  # 6 свечей 1H
+    t.id = "0001"
+    txt = signal_text(t, row, "Fake", pb, 11)
+    assert "лимит" in txt and "не догоняем" in txt
+    assert make_trade(row, side, "X", cfg).status == "open"  # market — как раньше

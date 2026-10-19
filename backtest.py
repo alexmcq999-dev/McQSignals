@@ -359,7 +359,8 @@ def replay_report(live: list[dict], feats: dict, cfg: dict, tolerance_h: float =
     lines = [
         f"# Сверка живых сигналов с бэктестом — {datetime.now(timezone.utc):%Y-%m-%d}", "",
         f"Окно: с {first:%d.%m.%Y %H:%M} UTC · монет: {len(sub)} · режим бэктеста: "
-        f"{cfg.get('strategy', {}).get('mode', 'trend')}", "",
+        f"{cfg.get('strategy', {}).get('mode', 'trend')} · 4H {cfg['signals'].get('htf_mode')} · "
+        f"BTC {cfg['signals'].get('btc_mode')} · вход {cfg['signals'].get('entry_mode', 'market')}", "",
         "## Итог", "",
         f"- Живых сделок: **{len(rows)}**, сумма **{sum(live_r):+.2f}R**, в плюс {len(win)}",
         f"- Бэктест на тех же монетах и окне: **{bts.get('n', 0)}** сделок, сумма **{bts.get('total_r', 0):+.2f}R**, "

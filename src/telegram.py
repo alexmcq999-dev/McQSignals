@@ -160,12 +160,19 @@ def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: i
     test = ("🧪 <b>ТЕСТ</b> — сигнал для проверки стратегии, не для торговли\n\n"
             if cfg.get("telegram", {}).get("test_mode") else "")
     kind = ("🔄 <b>Контртренд</b>: против толпы после снятия стопов\n" if t.kind == "contra" else "")
+    if t.status == "pending":
+        till = pd.Timestamp(t.expires).ceil("min").tz_convert(tz).strftime("%d.%m %H:%M")
+        entry = (f"Вход: <b>лимит</b> <code>{fp(t.entry)}</code> — на откате, закрытие свечи "
+                 f"<code>{fp(float(row['close']))}</code> не догоняем\n"
+                 f"Действует до {till} {tzl}, иначе отмена\n")
+    else:
+        entry = f"Вход: <code>{fp(t.entry)}</code>\n"
     return (
         f"{test}{side} · {html.escape(t.symbol)}/USDT</b> · {tf['entry'].upper()}\n{kind}"
         f"Сила: <b>{t.conf:.0f}/100</b> {bar(t.conf)}\n"
         f"Режим: {REGIME_RU.get(t.regime, t.regime)} (ADX {row['adx']:.0f}) · "
         f"{tf['confirm'].upper()}: {ARROW[int(row['htf_bias'])]}{btc}\n\n"
-        f"Вход: <code>{fp(t.entry)}</code>\n"
+        f"{entry}"
         f"Стоп: <code>{fp(t.sl)}</code> ({sl_pct:+.2f}%)\n"
         f"TP1: <code>{fp(t.tp1)}</code> ({pct(t.entry, t.tp1):+.2f}%) · {rk['tp1_r']}R — закрыть "
         f"{int(rk['tp1_close_frac'] * 100)}%, стоп в б/у\n"

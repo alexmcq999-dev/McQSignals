@@ -235,7 +235,14 @@ class Trade:
 def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float | None = None) -> Trade:
     rk = cfg["risk"]
     kind = str(row.get("kind", "") or "trend")
-    limit = row.get("bo_limit") if kind == "breakout" else None
+    sc = cfg.get("signals", {})
+    if kind == "breakout":
+        limit = row.get("bo_limit")
+    elif sc.get("entry_mode", "market") == "pullback":
+        # v4.1: не покупать закрытие импульсной свечи — лимит на откат pullback_atr × ATR
+        limit = float(row["close"]) - side * float(sc.get("pullback_atr", 0.5)) * float(row["atr"])
+    else:
+        limit = None
     pending = entry is None and limit is not None and pd.notna(limit)
     e = float(entry if entry is not None else (limit if pending else row["close"]))
     a = float(row["atr"])
@@ -263,15 +270,14 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
     opened = pd.Timestamp(row["close_time"])
     extra = {}
     if kind == "breakout":
-        from .config import TF_MINUTES
-
-        bc = setups.bcfg(cfg)
         extra = {"level": float(row["bo_level"]), "target": float(row["bo_target"]),
                  "notes": str(row.get("bo_notes", "") or "")}
-        if pending:
-            tfm = TF_MINUTES.get(cfg["timeframes"]["entry"], 60)
-            extra.update(status="pending",
-                         expires=(opened + pd.Timedelta(minutes=tfm * int(bc["retest_bars"]))).isoformat())
+    if pending:
+        from .config import TF_MINUTES
+
+        bars = setups.bcfg(cfg)["retest_bars"] if kind == "breakout" else sc.get("pullback_bars", 6)
+        tfm = TF_MINUTES.get(cfg["timeframes"]["entry"], 60)
+        extra.update(status="pending", expires=(opened + pd.Timedelta(minutes=tfm * int(bars))).isoformat())
     return Trade(
         symbol=symbol,
         side=side,
