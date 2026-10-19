@@ -4,6 +4,7 @@ import numpy as np
 
 
 def summarize(trades: list[dict], key: str = "r_gross") -> dict:
+    trades = [t for t in trades if t.get("exit_reason") != "expired"]  # неисполненные лимиты — не сделки
     r = np.array([t[key] for t in trades], dtype=float)
     if r.size == 0:
         return {"n": 0}

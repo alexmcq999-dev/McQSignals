@@ -130,7 +130,8 @@ def morning_due(now: pd.Timestamp, sig: dict, cfg: dict) -> bool:
 
 
 def morning_text(now: pd.Timestamp, cfg: dict, news_data: dict | None, crowd: list[dict], open_pub: list[dict],
-                 stats_24h: dict, stats_7d: dict, macro_state: dict | None = None, liq: dict | None = None) -> str:
+                 stats_24h: dict, stats_7d: dict, macro_state: dict | None = None, liq: dict | None = None,
+                 radar: list[dict] | None = None) -> str:
     tz = _tz(cfg)
     local = now.tz_convert(tz)
     nd = news_data or {}
@@ -199,10 +200,20 @@ def morning_text(now: pd.Timestamp, cfg: dict, news_data: dict | None, crowd: li
         if lines:
             p.append("🧲 <b>Скопления ликвидаций</b> (оценка)\n" + "\n".join(lines))
 
+    # сетапы на радаре
+    if radar:
+        rows = [f"{'🟢' if r['side'] == 'LONG' else '🔴'} {r['symbol']} уровень {r['level']:.6g} "
+                f"({(r['level'] / r['price'] - 1) * 100:+.1f}%) · оценка {r['score']:.0f}" for r in radar[:6]]
+        p.append("👀 <b>На радаре — готовятся пробои</b>\n" + "\n".join(rows)
+                 + "\n<i>Вход только после закрытия свечи за уровнем.</i>")
+
     # сигналы
     if open_pub:
-        rows = [f"{'🟢' if o['side'] == 'LONG' else '🔴'} {o['symbol']} {o.get('r_open', 0):+.2f}R"
-                + (" · TP1 ✓" if o.get("status") == "tp1" else "") for o in open_pub[:10]]
+        def _ro(o):
+            if o.get("status") == "pending":
+                return f"⏳ лимит {o['entry']:.6g}"
+            return f"{(o.get('r_open') or 0):+.2f}R" + (" · TP1 ✓" if o.get("status") == "tp1" else "")
+        rows = [f"{'🟢' if o['side'] == 'LONG' else '🔴'} {o['symbol']} {_ro(o)}" for o in open_pub[:10]]
         p.append(f"📂 <b>Открытые сигналы ({len(open_pub)})</b>\n" + "\n".join(rows))
     else:
         p.append("📂 Открытых сигналов нет")

@@ -1,4 +1,4 @@
-# ===================== McQ Signals v3 — настройки =====================
+# ===================== McQ Signals v4 — настройки =====================
 # Меняй параметры здесь, код трогать не нужно.
 
 universe:
@@ -16,6 +16,37 @@ timeframes:
   bars_entry: 600  # нужно >= 260 для EMA200
   bars_confirm: 400
 
+# v4: откуда берутся сигналы
+#   breakout — пробойные сетапы: паттерн ищется заранее, вход только на подтверждённом пробое (src/setups.py)
+#   trend    — трендовый консенсус v3 (входил поздно, на хаях/лоях: в живой работе 2 плюса из 18)
+#   both     — оба источника
+strategy:
+  mode: breakout
+
+# Пробойные сетапы (лонг — сопротивление сверху; шорт — зеркально, поддержка снизу)
+breakout:
+  base_bars: 36            # окно базы, свечей 1H
+  min_span_bars: 10        # первое и последнее касание уровня — не ближе 10 свечей
+  touch_tol_atr: 0.3       # касание = локальный максимум в пределах 0.3 ATR от уровня
+  min_touches: 2
+  min_height_atr: 1.5      # высота базы в ATR: уже — шум, шире — не база
+  max_height_atr: 8.0
+  bbw_lookback: 120        # перцентиль ширины Боллинджера (сжатие) за 120 свечей
+  vol_z_min: 1.0           # объём свечи пробоя выше нормы
+  close_pos_min: 0.5       # свеча пробоя закрылась в верхней половине (шорт — в нижней)
+  close_buffer_atr: 0.05
+  max_ext_atr: 4.0         # цена дальше 4 ATR от EMA50 — перегрев, не входим
+  entry_mode: auto         # auto — по рынку, а если свеча ушла > chase_max_atr — лимит на ретест · market · retest
+  chase_max_atr: 0.5
+  retest_bars: 6           # лимит действует 6 свечей, потом отменяется
+  retest_offset_atr: 0.1
+  stop_buffer_atr: 0.25    # стоп за минимумом последней трети базы (последний повышающийся минимум)
+  min_score: 75            # слабые и средние сетапы пропускаем
+  alert_score: 70          # «готовится пробой» — оценка сетапа до пробоя
+  alert_near_atr: 1.0      # цена не дальше 1 ATR от уровня
+  require_htf: true        # тренд 4H не против
+  max_alerts_per_run: 3
+
 signals:
   min_score: 70            # порог силы трендового сигнала 0..100
   min_agree: 5             # минимум трендовых модулей «за»
@@ -32,6 +63,8 @@ signals:
   atr_pct_max: 8.0
   lookback_bars_on_run: 2
   max_signal_age_minutes: 75  # сигнал со свечи старше — не отправляем (задержки Actions)
+  max_ext_atr: 0            # v4, для режима trend: не входить дальше N ATR от EMA20 (0 — выкл.)
+  rsi_cap: 0                # v4, для режима trend: не покупать при RSI > N и не шортить при RSI < 100−N (0 — выкл.)
   modules:                 # трендовый консенсус (контртрендовые модули — в разделе contrarian)
     - ema_trend
     - supertrend
@@ -147,27 +180,31 @@ telegram:
 # Варианты для `python backtest.py --experiments` — все на одних данных, 3 периода.
 # Рабочий вариант — в плюсе во ВСЕХ периодах.
 experiments:
-  - name: "v3.3 (config): тренд 1H/4H мягкий + фильтры толпы и F&G, фьючерсы"
+  - name: "v4 (config): пробойные сетапы, сила ≥ 75, авто-ретест"
     set: {}
-  - name: "v3.2 + сила ≥ 66"
-    set: {signals: {min_score: 66}}
-  - name: "v3.3 без фильтра Fear & Greed (как v3.2)"
-    set: {contrarian: {fng_filter: false}}
-  - name: "v3.2 без фильтра толпы"
-    set: {contrarian: {crowd_filter: false}}
-  - name: "v3.2 со строгим трендом (как v3.1)"
-    set: {signals: {htf_mode: strict, btc_mode: block, strict_shorts: true}}
-  - name: "v3.2 с комиссиями спота"
-    set: {costs: {fee_pct: 0.075}}
-  - name: "v3.2 фиксированный TP2"
-    set: {risk: {exit_mode: fixed, ttl_hours: 72}}
-  - name: "v3.2 трейлинг 2 ATR"
+  - name: "v4 пробой, сила ≥ 65"
+    set: {breakout: {min_score: 65}}
+  - name: "v4 пробой, сила ≥ 70"
+    set: {breakout: {min_score: 70}}
+  - name: "v4 пробой, сила ≥ 80"
+    set: {breakout: {min_score: 80}}
+  - name: "v4 пробой, всегда по рынку"
+    set: {breakout: {entry_mode: market}}
+  - name: "v4 пробой, всегда лимит на ретест"
+    set: {breakout: {entry_mode: retest}}
+  - name: "v4 пробой, мягкая база (допуск касания 0.5 ATR, высота ≤ 10 ATR)"
+    set: {breakout: {touch_tol_atr: 0.5, max_height_atr: 10.0}}
+  - name: "v4 пробой, ≥ 3 касаний"
+    set: {breakout: {min_touches: 3}}
+  - name: "v4 пробой, объём пробоя vol_z ≥ 1.5"
+    set: {breakout: {vol_z_min: 1.5}}
+  - name: "v4 пробой, трейлинг 2 ATR"
     set: {risk: {trail_atr: 2.0}}
-  - name: "v3.2 трейлинг 4 ATR"
-    set: {risk: {trail_atr: 4.0}}
-  - name: "v3.2 + макро DXY: штраф −10"
-    set: {macro: {mode: penalty}}
-  - name: "v3.2 + макро DXY: запрет против макро"
-    set: {macro: {mode: block}}
-  - name: "v3.2 только лонги (справочно)"
-    set: {signals: {sides: long_only}}
+  - name: "v4 пробой + тренд (оба источника)"
+    set: {strategy: {mode: both}}
+  - name: "v3.3 тренд (как было в живой работе)"
+    set: {strategy: {mode: trend}}
+  - name: "v3.3 тренд + не догонять (≤ 2 ATR от EMA20, RSI-кап 70)"
+    set: {strategy: {mode: trend}, signals: {max_ext_atr: 2.0, rsi_cap: 70}}
+  - name: "v3.3 тренд строгий (4H и BTC по направлению)"
+    set: {strategy: {mode: trend}, signals: {htf_mode: strict, btc_mode: block, strict_shorts: true}}

@@ -19,7 +19,8 @@ from src.engine import Trade, analyze, make_trade, update_trade  # noqa: E402
 
 @pytest.fixture(scope="module")
 def cfg():
-    return load_config()
+    """Тесты трендовой логики v3 (боевой режим v4 — breakout, его тесты ниже)."""
+    return load_config(overrides={"strategy": {"mode": "trend"}})
 
 
 def test_no_lookahead(cfg):
@@ -117,8 +118,8 @@ def test_levels_sane(cfg):
         assert len(t.reasons) >= cfg["signals"]["min_agree"]
 
 
-def test_scan_dry_run(monkeypatch, tmp_path, capsys):
-    """Полный проход scan.py на синтетике: сигналы → сопровождение → состояние."""
+def _scan_env(monkeypatch, tmp_path, now, frames, hourly=None):
+    """Окружение scan.py без сети: фейковая биржа, толпа, новости, макро."""
     import scan
     from src import config, data, store
 
@@ -128,32 +129,30 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
     from src import liqmap as lm_
     monkeypatch.setattr(lm_, "STATE_DIR", tmp_path)
     monkeypatch.setattr(lm_.cw, "fetch_raw", lambda fs, d: None)  # без сети
-
-    # фиксированное время → детерминированный тест (не зависит от времени суток запуска)
-    now = pd.Timestamp("2026-06-10 12:03", tz="UTC")
-    n = 4 * 1200  # 15m свечи → 1200 часовых
-    start = now.floor("15min") - pd.Timedelta(minutes=15 * (n - 1))
-    frames = {f"C{i}": synth(n, seed=i, start=str(start.tz_convert(None))) for i in range(40)}
-    frames["BTC"] = synth(n, seed=999, start=str(start.tz_convert(None)))
+    hourly = hourly or {}
+    names = list(frames) + list(hourly)
 
     class Fake:
         name = "Fake"
 
         def tickers(self):
-            return {k: 5e7 for k in frames}
+            return {k: 5e7 for k in names}
 
         def klines(self, b, tf, limit, end_ms=None):
+            if b in hourly:
+                src = hourly[b]
+                df = src if tf in ("1h", "15m") else resample(src, {"4h": "4h", "1d": "1D"}[tf])
+                return df.tail(limit).reset_index(drop=True)
             rule = {"15m": None, "1h": "1h", "4h": "4h", "1d": "1D"}[tf]
             df = frames[b] if rule is None else resample(frames[b], rule)
             return df.tail(limit).reset_index(drop=True)
 
     monkeypatch.setattr(scan, "pick_provider", lambda: (Fake(), Fake().tickers()))
-    # толпа / F&G / новости — без сети
     days = pd.date_range(end=now.floor("D") - pd.Timedelta(days=1), periods=20, freq="D")
     rng = np.random.default_rng(0)
     fake_cache = {k: {"fsym": k + "USDT", "days": {d.strftime("%Y-%m-%d"): {
         "ls_acc": float(np.exp(rng.normal(0.3, 0.2))), "ls_top": float(np.exp(rng.normal(0, 0.2))),
-        "taker": 1.0, "oi": 1e8} for d in days}} for k in frames}
+        "taker": 1.0, "oi": 1e8} for d in days}} for k in names}
     monkeypatch.setattr(scan.cw, "fetch_metrics", lambda bases, ds, *a, **k: fake_cache)
     monkeypatch.setattr(scan.cw, "fetch_fng", lambda *a, **k: pd.DataFrame(
         {"fng": [75] * 20, "usable_time": days + pd.Timedelta(days=1)}))
@@ -162,15 +161,27 @@ def test_scan_dry_run(monkeypatch, tmp_path, capsys):
                   "ts": (now - pd.Timedelta(hours=2)).isoformat()}],
         "sentiment": {"fng": {"crypto": {"value": 75, "rating_ru": "жадность"}}},
         "calendar": [{"ts": (now + pd.Timedelta(hours=5)).isoformat(), "title": "CPI", "impact": "High"}]})
-    # макро: DXY без сети — синтетический дневной ряд
     dxy_idx = pd.date_range(end=now.floor("D"), periods=600, freq="D", tz="UTC")
     dxy = pd.Series(100 * np.exp(np.cumsum(np.random.default_rng(5).normal(0, 0.004, 600))), index=dxy_idx)
     monkeypatch.setattr(scan.mc, "fetch_driver", lambda d, days: dxy)
-    monkeypatch.setattr(data, "_coingecko_caps", lambda: [{"symbol": k, "name": k, "mcap": 2e8} for k in frames])
+    monkeypatch.setattr(data, "_coingecko_caps", lambda: [{"symbol": k, "name": k, "mcap": 2e8} for k in names])
     monkeypatch.setattr(sys, "argv", ["scan.py", "--dry-run", "--now", now.isoformat()])
+    return scan, store
+
+
+def test_scan_dry_run(monkeypatch, tmp_path, capsys):
+    """Полный проход scan.py на синтетике: сигналы → сопровождение → состояние."""
+    # фиксированное время → детерминированный тест (не зависит от времени суток запуска)
+    now = pd.Timestamp("2026-06-10 12:03", tz="UTC")
+    n = 4 * 1200  # 15m свечи → 1200 часовых
+    start = now.floor("15min") - pd.Timedelta(minutes=15 * (n - 1))
+    frames = {f"C{i}": synth(n, seed=i, start=str(start.tz_convert(None))) for i in range(40)}
+    frames["BTC"] = synth(n, seed=999, start=str(start.tz_convert(None)))
+    scan, store = _scan_env(monkeypatch, tmp_path, now, frames)
     # лояльный порог, чтобы гарантированно увидеть сигнал на последних свечах
     orig = scan.load_config
     monkeypatch.setattr(scan, "load_config", lambda: orig(overrides={
+        "strategy": {"mode": "both"}, "breakout": {"min_score": 40, "alert_score": 40},
         "signals": {"min_score": 30, "min_agree": 3, "lookback_bars_on_run": 40, "htf_mode": "loose",
                     "btc_mode": "penalty", "strict_shorts": False},
         "risk": {"max_cost_r": 0}}))
@@ -232,11 +243,11 @@ def test_v2_filters(cfg):
     """Строгие режимы только сокращают сигналы и не создают новых."""
     btc = resample(synth(3000, seed=999))
     d = synth(3000, seed=5)
-    loose = load_config(overrides={"signals": {"htf_mode": "loose", "btc_mode": "penalty", "strict_shorts": False}})
+    loose = load_config(overrides={"strategy": {"mode": "trend"}, "signals": {"htf_mode": "loose", "btc_mode": "penalty", "strict_shorts": False}})
     a = analyze(d, resample(d), btc, loose)
-    strict = load_config(overrides={"signals": {"htf_mode": "strict", "btc_mode": "block", "strict_shorts": True}})
+    strict = load_config(overrides={"strategy": {"mode": "trend"}, "signals": {"htf_mode": "strict", "btc_mode": "block", "strict_shorts": True}})
     b = analyze(d, resample(d), btc, strict)
-    lo = load_config(overrides={"signals": {"sides": "long_only"}})
+    lo = load_config(overrides={"strategy": {"mode": "trend"}, "signals": {"sides": "long_only"}})
     c = analyze(d, resample(d), btc, lo)
     assert (c.signal < 0).sum() == 0
     s_b = b[b.signal < 0]
@@ -249,7 +260,7 @@ def test_cost_filter_and_min_stop(cfg):
 
     btc = resample(synth(3000, seed=999))
     d = synth(3000, seed=2)
-    o = analyze(d, resample(d), btc, load_config(overrides={"signals": {"min_score": 40, "min_agree": 3}}))
+    o = analyze(d, resample(d), btc, load_config(overrides={"strategy": {"mode": "trend"}, "signals": {"min_score": 40, "min_agree": 3}}))
     row = o.iloc[np.flatnonzero(o.signal.to_numpy() != 0)[0]]
     t = make_trade(row, int(row.signal), "X", cfg)
     from src.engine import cost_pct
@@ -325,7 +336,7 @@ def test_macro_modes(cfg):
     tbl = pd.DataFrame({"week": weeks, "usable_time": weeks + pd.Timedelta(days=1), "macro_bias": -1.0,
                         "macro_DXY_corr": -0.7, "macro_DXY_trend": 1, "macro_DXY_on": 1.0, "macro_DXY_dev": 1.2})
     f = build_features(d, resample(d), btc, macro=tbl)
-    lo = {"signals": {"min_score": 40, "min_agree": 3}}
+    lo = {"strategy": {"mode": "trend"}, "signals": {"min_score": 40, "min_agree": 3}}
     off = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "off"}}))
     sh = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "shadow"}}))
     bl = score_frame(f, load_config(overrides={**lo, "macro": {"mode": "block"}}))
@@ -447,3 +458,178 @@ def test_crowd_recent_days_are_retried(tmp_path, monkeypatch):
     published.add(days[-1])                      # файл появился
     c2 = cw_.fetch_metrics(["NEAR"], days, path, workers=2)
     assert days[-1] in c2["NEAR"]["days"]
+
+
+# ------------------------------------------------------------------ v4: пробойные сетапы
+
+def _bo_frame(cfg_, retest=False, short=False):
+    from synth import breakout_pattern, mirror
+    from src.engine import score_frame
+    from src.strategies import build_features
+
+    df, i = breakout_pattern(retest=retest)
+    if short:
+        df = mirror(df)
+    return score_frame(build_features(df, resample(df, "4h"), None), cfg_, is_btc=True), i, df
+
+
+@pytest.mark.parametrize("short", [False, True])
+def test_breakout_detects_textbook_pattern(short):
+    """Восходящий треугольник (и его зеркало) → предупреждение до пробоя и сигнал на свече пробоя."""
+    c = load_config()
+    assert c["strategy"]["mode"] == "breakout"
+    o, i, _ = _bo_frame(c, short=short)
+    side = -1 if short else 1
+    sig = np.flatnonzero(o["signal"].to_numpy() != 0)
+    assert list(sig) == [i] and o["signal"].iloc[i] == side and o["kind"].iloc[i] == "breakout"
+    assert o["conf"].iloc[i] >= c["breakout"]["min_score"]
+    assert (o["bo_armed"].iloc[i - 10:i] == side).any()          # «готовится пробой» пришёл заранее
+    lvl = o["bo_level"].iloc[i]
+    assert abs(lvl - (115.0 if short else 105.0)) < 1e-9          # уровень = верх базы
+    t = make_trade(o.iloc[i], side, "X", c)
+    assert t.kind == "breakout" and t.status == "open" and t.level == lvl
+    assert (t.sl < lvl < t.entry < t.tp1) if side > 0 else (t.sl > lvl > t.entry > t.tp1)
+    assert side * (t.target - lvl) > 0 and "3 касания уровня" in t.notes
+    # строже порог → сигнала нет (слабые и средние сетапы пропускаются)
+    o2, _, _ = _bo_frame(load_config(overrides={"breakout": {"min_score": 95}}), short=short)
+    assert (o2["signal"] == 0).all()
+
+
+def test_breakout_no_lookahead():
+    from synth import breakout_pattern
+    from src.engine import score_frame
+    from src.strategies import build_features
+
+    c = load_config()
+    df, i = breakout_pattern()
+    full = score_frame(build_features(df, resample(df, "4h"), None), c, is_btc=True)
+    cols = ["signal", "conf", "bo_armed", "bo_level", "bo_stop", "bo_pre"]
+    for cut in (i - 6, i - 2, i, i + 1, i + 5):
+        d = df.iloc[:cut + 1]
+        h = resample(d, "4h")
+        part = score_frame(build_features(d, h[h.close_time <= d.close_time.iloc[-1]], None), c, is_btc=True)
+        a, b = part[cols].iloc[-1].astype(float), full[cols].iloc[cut].astype(float)
+        assert np.allclose(a.fillna(-1), b.fillna(-1)), f"look-ahead на баре {cut}"
+
+
+def test_breakout_far_close_gives_retest_limit():
+    c = load_config()
+    o, i, df = _bo_frame(c, retest=True)
+    row = o.iloc[i]
+    assert row["signal"] == 1 and pd.notna(row["bo_limit"])
+    t = make_trade(row, 1, "X", c)
+    assert t.status == "pending" and t.entry == pytest.approx(row["bo_limit"]) and t.entry < row["close"]
+    assert pd.Timestamp(t.expires) == pd.Timestamp(row["close_time"]) + pd.Timedelta(hours=c["breakout"]["retest_bars"])
+    # прогон: цена возвращается к уровню → лимит исполнен, дальше сделка ведётся как обычно
+    evs = []
+    for _, b in df.iloc[i + 1:].iterrows():
+        evs += update_trade(t, b, c)
+        if t.status == "closed":
+            break
+    assert evs[0] == "filled" and t.filled
+    # режим market — без лимита
+    om, _, _ = _bo_frame(load_config(overrides={"breakout": {"entry_mode": "market"}}), retest=True)
+    assert make_trade(om.iloc[i], 1, "X", c).status == "open"
+
+
+def _pending(side=1):
+    t = Trade(symbol="X", side=side, entry=100.0, sl=100 - side * 2, tp1=100 + side * 3, tp2=100 + side * 6,
+              risk=2.0, opened="2026-01-01T00:00:00+00:00", kind="breakout", status="pending",
+              expires="2026-01-01T06:00:00+00:00")
+    t.atr, t.peak = 1.0, 100.0
+    return t
+
+
+def test_pending_fill_expire_and_stats(cfg):
+    from src.stats import summarize
+
+    t = _pending()
+    assert update_trade(t, _bar(101.5, 100.4, 101, "2026-01-01T01:00:00+00:00"), cfg) == []   # не дошла до лимита
+    assert t.status == "pending" and t.bars_held == 0
+    assert update_trade(t, _bar(101, 99.5, 100.5, "2026-01-01T02:00:00+00:00"), cfg) == ["filled"]
+    assert t.status == "open" and t.filled.startswith("2026-01-01T02")
+    # TTL считается от исполнения, а не от сигнала
+    ttl = cfg["risk"]["ttl_hours"]
+    almost = (pd.Timestamp(t.opened) + pd.Timedelta(hours=ttl, minutes=30)).isoformat()
+    assert update_trade(t, _bar(101, 99.5, 100.2, almost), cfg) == []
+    # исполнение и стоп в одной свече → стоп
+    t2 = _pending(-1)
+    assert update_trade(t2, _bar(102.5, 99, 101, "2026-01-01T01:00:00+00:00"), cfg) == ["filled", "sl"]
+    assert t2.r_gross == -1.0
+    # цена ушла к TP1 без нас → отмена; истекло время → отмена
+    t3 = _pending()
+    assert update_trade(t3, _bar(103.2, 100.5, 103, "2026-01-01T01:00:00+00:00"), cfg) == ["expired"]
+    t4 = _pending()
+    assert update_trade(t4, _bar(101, 100.5, 101, "2026-01-01T06:00:00+00:00"), cfg) == ["expired"]
+    s = summarize([t2.to_dict(), t3.to_dict(), t4.to_dict()], "r_gross")
+    assert s["n"] == 1 and "expired" not in s["by_exit"]
+
+
+def test_breakout_texts():
+    from src.telegram import breakout_text, event_text, setup_alert_text
+
+    c = load_config()
+    o, i, _ = _bo_frame(c, retest=True)
+    row = o.iloc[i]
+    t = make_trade(row, 1, "AVAX", c)
+    t.id = "0001"
+    txt = breakout_text(t, row, "Binance", c)
+    assert "Пробой" in txt and "лимит" in txt and "ретест" in txt and "касания" in txt and "\\n" not in txt
+    arm = o.iloc[np.flatnonzero(o["bo_armed"].to_numpy() != 0)[0]]
+    a = setup_alert_text("AVAX", arm, float(arm["close"]), c)
+    assert "Готовится пробой" in a and "Заранее не входим" in a
+    assert "Лимит исполнен" in event_text(t, "filled") and "отменён" in event_text(t, "expired")
+
+
+def test_backtest_breakout_and_replay(tmp_path, monkeypatch):
+    """simulate() с пробоями (вкл. лимиты) и сверка «живые сделки ↔ бэктест»."""
+    import json
+
+    import backtest
+    from synth import breakout_pattern
+
+    c = load_config(overrides={"risk": {"ttl_hours": 24}})  # чтобы сделка успела закрыться на коротких данных
+    df, i = breakout_pattern(retest=True, after=40)
+    f = backtest.prepare({"X": (df, resample(df, "4h"), None)}, resample(df, "4h"))  # BTC 4H тоже бычий
+    tr = backtest.run(f, c, df["close_time"].iloc[0])
+    assert len(tr) == 1 and tr[0]["kind"] == "breakout" and tr[0]["filled"]
+    live = [{**tr[0], "id": "0007", "r_gross": -1.0, "exit_reason": "sl"},
+            {**tr[0], "symbol": "X", "opened": df["close_time"].iloc[i - 30].isoformat(), "id": "0008",
+             "r_gross": -1.0, "exit_reason": "sl", "entry": float(df["close"].iloc[i - 30])}]
+    md, rows = backtest.replay_report(live, f, c, tolerance_h=2)
+    by = {r["id"]: r for r in rows}
+    assert "0007" in md and by["0007"]["matched"] and not by["0008"]["matched"]
+    assert {"ext_ema20_atr", "rsi", "range_pos"} <= set(by["0007"])
+    json.dumps(rows, default=str)
+
+
+def test_scan_breakout_alert_then_signal(monkeypatch, tmp_path, capsys):
+    """Боевой режим v4: сначала «👀 готовится пробой», потом сигнал на закрытии свечи пробоя, без дублей."""
+    import json as _j
+
+    from synth import breakout_pattern
+
+    pat, i = breakout_pattern(start="2026-03-01")
+    btc, _ = breakout_pattern(start="2026-03-01", seed=7)
+    btc = btc.iloc[:i - 12]  # BTC: просто бычий тренд без пробоя
+    t_arm = pat["close_time"].iloc[i - 3] + pd.Timedelta(minutes=3)
+    t_bo = pat["close_time"].iloc[i] + pd.Timedelta(minutes=3)
+
+    scan, store = _scan_env(monkeypatch, tmp_path, t_arm, {}, hourly={"PAT": pat.iloc[:i - 2], "BTC": btc})
+    scan.main()
+    out = capsys.readouterr().out
+    assert "Готовится пробой" in out and "PAT" in out
+    app = _j.loads((tmp_path / "app_signals.json").read_text())
+    assert app["strategy"] == "breakout" and app["radar"] and app["radar"][0]["symbol"] == "PAT"
+    assert not store.load("signals")["open"]
+
+    scan, store = _scan_env(monkeypatch, tmp_path, t_bo, {}, hourly={"PAT": pat.iloc[:i + 1], "BTC": btc})
+    scan.main()
+    out = capsys.readouterr().out
+    assert "Пробой" in out and "PAT/USDT" in out and "Готовится пробой" not in out
+    st = store.load("signals")
+    assert [t["symbol"] for t in st["open"]] == ["PAT"] and st["open"][0]["kind"] == "breakout"
+    app = _j.loads((tmp_path / "app_signals.json").read_text())
+    assert app["open"][0]["level"] == pytest.approx(105.0) and app["open"][0]["reasons"]
+    scan.main()  # повторный прогон — без дублей
+    assert len(store.load("signals")["open"]) == 1

@@ -12,9 +12,9 @@ on:
         description: "Сколько монет (топ по ликвидности)"
         default: "25"
       mode:
-        description: "report — обычный отчёт · grid — перебор порогов · experiments — сравнение вариантов (360д, 3 периода)"
+        description: "report — обычный отчёт · grid — перебор порогов · experiments — сравнение вариантов (360д, 3 периода) · replay — сверка живых сигналов с бэктестом"
         type: choice
-        options: [report, grid, experiments]
+        options: [report, grid, experiments, replay]
         default: report
 
 permissions:
@@ -57,6 +57,9 @@ jobs:
           if [ "$MODE" = "experiments" ]; then
             python backtest.py $ARGS --experiments
             cat reports/experiments_latest.md >> "$GITHUB_STEP_SUMMARY"
+          elif [ "$MODE" = "replay" ]; then
+            python backtest.py --replay
+            cat reports/replay_latest.md >> "$GITHUB_STEP_SUMMARY"
           elif [ "$MODE" = "grid" ]; then
             python backtest.py $ARGS --days ${{ github.event.inputs.days || '180' }} --grid
             cat reports/grid_latest.md >> "$GITHUB_STEP_SUMMARY"

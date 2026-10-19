@@ -5,6 +5,7 @@
   python backtest.py --grid             — перебор порогов min_score / min_agree
   python backtest.py --experiments      — сравнение вариантов из config.yaml на 2 периодах по 60 дней
   python backtest.py --synthetic        — офлайн-проверка на синтетике (без сети)
+  python backtest.py --replay           — сверка живых сигналов (state/history.json) с бэктестом того же окна
 
 Честность симуляции:
   • индикаторы каузальные, 1H берётся только ЗАКРЫТАЯ свеча;
@@ -46,7 +47,8 @@ def simulate(out: pd.DataFrame, symbol: str, cfg: dict, start_time, end_time=Non
         if t is not None:
             update_trade(t, bars[i], cfg, fee_pct=cost)
             if t.status == "closed":
-                trades.append(t.to_dict())
+                if t.exit_reason != "expired":  # неисполненный лимит — не сделка
+                    trades.append(t.to_dict())
                 t = None
             continue  # в баре закрытия новую сделку не открываем
         if sigs[i] == 0 or ct[i] < start64 or (end64 is not None and ct[i] >= end64):
@@ -112,6 +114,9 @@ def report(trades: list[dict], cfg: dict, meta: dict) -> str:
     lines += [_row("Первая половина периода", trades[:half]), _row("Вторая половина периода", trades[half:])]
     lines += [_row("LONG", [t for t in trades if t["side"] > 0]), _row("SHORT", [t for t in trades if t["side"] < 0])]
     lines += [_row("Трендовые сигналы", [t for t in trades if t.get("kind", "trend") == "trend"]),
+              _row("Пробойные сетапы", [t for t in trades if t.get("kind") == "breakout"]),
+              _row("Пробой: вход по рынку", [t for t in trades if t.get("kind") == "breakout" and not t.get("filled")]),
+              _row("Пробой: лимит на ретест", [t for t in trades if t.get("kind") == "breakout" and t.get("filled")]),
               _row("Контртрендовые (против толпы)", [t for t in trades if t.get("kind") == "contra"])]
     if any(t.get("macro") for t in trades):
         lines += [_row("Макро: по направлению сделки", [t for t in trades if t.get("macro") == "with"]),
@@ -119,7 +124,7 @@ def report(trades: list[dict], cfg: dict, meta: dict) -> str:
                   _row("Макро: нейтрально / связи нет", [t for t in trades if t.get("macro") == "neutral"])]
     for reg in ("trend", "neutral", "range"):
         lines.append(_row(f"Режим: {reg}", [t for t in trades if t["regime"] == reg]))
-    for lo, hi in ((0, 70), (70, 80), (80, 101)):
+    for lo, hi in ((0, 70), (70, 75), (75, 80), (80, 85), (85, 101)):
         lines.append(_row(f"Сила {lo}–{min(hi, 100)}", [t for t in trades if lo <= t["conf"] < hi]))
     lines += ["", "## Вклад модулей (сделки, где модуль голосовал «за»)", "", HDR]
     for m, (nm, fam) in MODULES.items():
@@ -156,7 +161,7 @@ MACRO_NOTE = [""]  # строка о макро-данных для отчёта
 RULE = {"15m": "15min", "30m": "30min", "1h": "1h", "4h": "4h", "1d": "1D"}
 
 
-def load_live(cfg, days, n_symbols):
+def load_live(cfg, days, n_symbols, bases=None):
     from src import crowd as cw
     from src import macro as mc
     from src.config import ROOT, TF_MINUTES
@@ -164,8 +169,9 @@ def load_live(cfg, days, n_symbols):
 
     tf = cfg["timeframes"]
     provider, tickers = pick_provider()
-    uni = build_universe(cfg, provider, tickers)[:n_symbols]
-    bases = [a["base"] for a in uni]
+    if bases is None:
+        uni = build_universe(cfg, provider, tickers)[:n_symbols]
+        bases = [a["base"] for a in uni]
     nE = int(days * 1440 / TF_MINUTES[tf["entry"]]) + 400
     nC = int(days * 1440 / TF_MINUTES[tf["confirm"]]) + 260
     kE = fetch_many(provider, bases, tf["entry"], nE)
@@ -281,6 +287,106 @@ def tg_experiments(summary, meta) -> str:
     return "\n".join(lines)
 
 
+# ------------------------------------------------------------------ сверка с живой работой
+
+def _entry_features(f: pd.DataFrame, opened, side: int) -> dict:
+    """Где находилась цена в момент живого сигнала: насколько «догоняли»."""
+    ct = pd.to_datetime(f["close_time"])
+    ts = pd.Timestamp(opened)
+    idx = ct.searchsorted(ts, side="right") - 1
+    if idx < 50:
+        return {}
+    r = f.iloc[idx]
+    w = f.iloc[idx - 49:idx + 1]
+    hi, lo, a = float(w["high"].max()), float(w["low"].min()), float(r["atr"])
+    pos = (float(r["close"]) - lo) / max(hi - lo, 1e-12)
+
+    def g(c, nd=2):
+        v = r.get(c)
+        return None if v is None or pd.isna(v) else round(float(v), nd)
+
+    return {
+        "bar": pd.Timestamp(r["close_time"]).isoformat(),
+        "ext_ema20_atr": round(side * (float(r["close"]) - float(r["ema20"])) / a, 2),
+        "ext_ema50_atr": round(side * (float(r["close"]) - float(r["ema50"])) / a, 2),
+        "rsi": g("rsi", 1),
+        "range_pos": round(pos if side > 0 else 1 - pos, 2),  # 1.0 = у самого экстремума 50 свечей по направлению
+        "move_10_atr": round(side * (float(r["close"]) - float(f["close"].iloc[idx - 10])) / a, 2),
+        "vol_z": g("vol_z"), "adx": g("adx", 0), "atr_pct": g("atr_pct"), "crowd_z": g("ls_acc_z"), "fng": g("fng", 0),
+    }
+
+
+def replay_report(live: list[dict], feats: dict, cfg: dict, tolerance_h: float = 2) -> tuple[str, list[dict]]:
+    """Прогоняет бэктест на окне живых сделок и сопоставляет сделку к сделке."""
+    first = min(pd.Timestamp(t["opened"]) for t in live) - pd.Timedelta(hours=1)
+    sub = {s: f for s, f in feats.items() if s in {t["symbol"] for t in live}}
+    bt = run(sub, cfg, first)
+    tol = pd.Timedelta(hours=tolerance_h)
+    rows, used = [], set()
+    for t in sorted(live, key=lambda x: x["opened"]):
+        side = t["side"] if isinstance(t["side"], int) else (1 if t["side"] == "LONG" else -1)
+        best = None
+        for j, b in enumerate(bt):
+            if j in used or b["symbol"] != t["symbol"] or b["side"] != side:
+                continue
+            dt = abs(pd.Timestamp(b["opened"]) - pd.Timestamp(t["opened"]))
+            if dt <= tol and (best is None or dt < best[1]):
+                best = (j, dt)
+        b = bt[best[0]] if best else None
+        if best:
+            used.add(best[0])
+        fe = _entry_features(sub[t["symbol"]], t["opened"], side) if t["symbol"] in sub else {}
+        rows.append({"id": t.get("id", ""), "symbol": t["symbol"], "side": side, "opened": t["opened"],
+                     "live_exit": t.get("exit_reason", ""), "live_r": t.get("r_gross"), "matched": bool(b),
+                     "bt_exit": b["exit_reason"] if b else "", "bt_r": b["r_gross"] if b else None,
+                     "stop_atr": round(t["risk"] / t["atr"], 2) if t.get("atr") else None,
+                     "stop_pct": round(t["risk"] / t["entry"] * 100, 2), **fe})
+    live_r = [r["live_r"] for r in rows if r["live_r"] is not None]
+    m = [r for r in rows if r["matched"]]
+    extra = [b for j, b in enumerate(bt) if j not in used]
+    bts = summarize(bt, "r_gross")
+
+    def avg(key, rs):
+        v = [r[key] for r in rs if r.get(key) is not None]
+        return f"{np.mean(v):+.2f}" if v else "–"
+
+    win = [r for r in rows if (r["live_r"] or 0) > 0]
+    loss = [r for r in rows if (r["live_r"] or 0) <= 0]
+    btf = [_entry_features(sub[b["symbol"]], b["opened"], b["side"]) for b in bt]
+    keys = [("ext_ema20_atr", "От EMA20, ATR"), ("ext_ema50_atr", "От EMA50, ATR"), ("rsi", "RSI"),
+            ("range_pos", "Позиция в диапазоне 50 свечей (1 = экстремум)"), ("move_10_atr", "Ход за 10 свечей, ATR"),
+            ("stop_atr", "Стоп, ATR"), ("stop_pct", "Стоп, %"), ("crowd_z", "Толпа z"), ("fng", "F&G")]
+    lines = [
+        f"# Сверка живых сигналов с бэктестом — {datetime.now(timezone.utc):%Y-%m-%d}", "",
+        f"Окно: с {first:%d.%m.%Y %H:%M} UTC · монет: {len(sub)} · режим бэктеста: "
+        f"{cfg.get('strategy', {}).get('mode', 'trend')}", "",
+        "## Итог", "",
+        f"- Живых сделок: **{len(rows)}**, сумма **{sum(live_r):+.2f}R**, в плюс {len(win)}",
+        f"- Бэктест на тех же монетах и окне: **{bts.get('n', 0)}** сделок, сумма **{bts.get('total_r', 0):+.2f}R**, "
+        f"winrate {bts.get('winrate', 0):.0f}%",
+        f"- Совпало сделка-в-сделку (±{tolerance_h:g}ч): **{len(m)}/{len(rows)}**; бэктест дал ещё {len(extra)} сделок, "
+        f"которых не было вживую",
+        f"- По совпавшим: живые {sum(r['live_r'] or 0 for r in m):+.2f}R против бэктеста "
+        f"{sum(r['bt_r'] or 0 for r in m):+.2f}R (разница = исполнение/сопровождение, а не стратегия)", "",
+        "## Где были входы", "",
+        "| Признак | Живые: прибыльные | Живые: убыточные | Все сделки бэктеста в окне |", "|---|---|---|---|",
+        *[f"| {nm} | {avg(k, win)} | {avg(k, loss)} | {avg(k, btf) if k not in ('stop_atr', 'stop_pct') else '–'} |"
+          for k, nm in keys], "",
+        "## Сделки", "",
+        "| # | Монета | Сторона | Свеча | Живой итог | Бэктест | От EMA20 ATR | RSI | Позиция | Ход 10 св. | Стоп % |",
+        "|---|---|---|---|---|---|---|---|---|---|---|",
+    ]
+    for r in rows:
+        bt_s = f"{r['bt_exit']} {r['bt_r']:+.2f}R" if r["matched"] else "нет сделки"
+        lines.append(f"| {r['id']} | {r['symbol']} | {'L' if r['side'] > 0 else 'S'} | {r['opened'][:16]} | "
+                     f"{r['live_exit']} {(r['live_r'] or 0):+.2f}R | {bt_s} | {r.get('ext_ema20_atr', '–')} | "
+                     f"{r.get('rsi', '–')} | {r.get('range_pos', '–')} | {r.get('move_10_atr', '–')} | {r['stop_pct']} |")
+    lines += ["", "> Позиция 0.9–1.0 и ход за 10 свечей > 3 ATR = вход после того, как движение уже случилось "
+              "(«на хаях/лоях»). Если совпавшие сделки и в бэктесте убыточны — проблема в логике входа, "
+              "если в бэктесте плюс — в исполнении/сопровождении."]
+    return "\n".join(lines), rows
+
+
 def _broadcast(text):
     if not os.getenv("TELEGRAM_BOT_TOKEN"):
         return
@@ -300,8 +406,34 @@ def main():
     ap.add_argument("--experiments", action="store_true")
     ap.add_argument("--synthetic", action="store_true")
     ap.add_argument("--no-telegram", action="store_true")
+    ap.add_argument("--replay", action="store_true")
+    ap.add_argument("--since", default="2026-09-25T10:14:00+00:00", help="--replay: живые сделки с этого времени")
+    ap.add_argument("--replay-mode", default="trend", help="--replay: режим стратегии для бэктеста (как был вживую)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+
+    if a.replay:
+        import json
+
+        from src import store
+        hist = store.load("history")
+        since = pd.Timestamp(a.since)
+        live = [t for t in hist["closed"] if pd.Timestamp(t["opened"]) >= since]
+        if not live:
+            print("Живых сделок в окне нет")
+            return
+        cfg = load_config(overrides={"strategy": {"mode": a.replay_mode}})
+        bases = sorted({t["symbol"] for t in live})
+        days = (pd.Timestamp.now(tz="UTC") - since).days + 3
+        data, btc, fng, provider, macro_tbl = load_live(cfg, days, len(bases), bases=bases)
+        feats = prepare(data, btc, fng, macro_tbl)
+        md, rows = replay_report(live, feats, cfg)
+        REPORTS_DIR.mkdir(exist_ok=True)
+        (REPORTS_DIR / "replay_latest.md").write_text(md, encoding="utf-8")
+        (REPORTS_DIR / "replay_latest.json").write_text(json.dumps(rows, ensure_ascii=False, default=str),
+                                                        encoding="utf-8")
+        print(md)
+        return
 
     cfg = load_config()
     days = a.days or (cfg["backtest"].get("experiments_days", 120) if a.experiments else cfg["backtest"]["days"])

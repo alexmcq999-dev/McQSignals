@@ -23,14 +23,16 @@ from src.data import build_universe, fetch_many, pick_provider, split_closed
 from src.engine import Trade, analyze, update_trade
 from src.engine import make_trade, trade_ok
 from src.strategies import MODULES
-from src.telegram import TG, event_text, signal_text, stats_text, fp
+from src.telegram import TG, event_text, fp, setup_alert_text, signal_text, stats_text
 
 log = logging.getLogger("scan")
 
 HELP = (
     "🤖 <b>McQ Signals</b> — сигналы ({etf} + фильтр {ctf}) по ликвидным монетам с капой ≥ $100M.\n\n"
-    "Каждый сигнал — консенсус классических стратегий (тренд, импульс, пробой, возврат к среднему, "
-    "объём, позиционирование толпы) с учётом режима рынка, тренда {ctf} и BTC.\n\n"
+    "Бот заранее ищет пробойные паттерны (база с плоским уровнем, сжатие, повышающиеся минимумы, "
+    "затухание объёма) и присылает «👀 готовится пробой». Сигнал на вход — только когда свеча {etf} "
+    "закрылась за уровнем с объёмом и оценка сетапа ≥ порога; слабые сетапы пропускаются. "
+    "Если цена уже ушла от уровня — бот не догоняет, а даёт лимит на ретест.\n\n"
     "Команды:\n"
     "/stats — результаты сигналов (7д / 30д / всё время)\n"
     "/open — открытые сигналы\n"
@@ -91,8 +93,9 @@ def handle_commands(tg: TG, cfg, subs, sig, hist):
             if not rows:
                 tg.send(chat, "Открытых сигналов нет.")
             else:
+                st_ = {"tp1": "TP1 ✅", "pending": "⏳ ждёт лимит"}
                 lines = [f"{'🟢' if t.side > 0 else '🔴'} {t.symbol} вход {fp(t.entry)} · стоп {fp(t.sl)} · "
-                         f"{'TP1 ✅' if t.status == 'tp1' else 'в работе'} · #{t.id}" for t in rows]
+                         f"{st_.get(t.status, 'в работе')} · #{t.id}" for t in rows]
                 tg.send(chat, "📂 <b>Открытые сигналы</b>\n" + "\n".join(lines))
         elif cmd == "/coins":
             u_ = store.STATE_DIR / "universe.json"
@@ -105,10 +108,13 @@ def handle_commands(tg: TG, cfg, subs, sig, hist):
 
 def _pub(t: Trade, price: float | None = None) -> dict:
     d = {k: getattr(t, k) for k in ("id", "symbol", "side", "kind", "entry", "sl", "tp1", "risk", "opened", "conf",
-                                    "regime", "reasons", "status", "exit_reason", "r_gross", "closed")}
+                                    "regime", "reasons", "status", "exit_reason", "r_gross", "closed", "level",
+                                    "target", "notes", "expires", "filled")}
     d["side"] = "LONG" if t.side > 0 else "SHORT"
-    d["reasons"] = [MODULES[m][0] for m in t.reasons if m in MODULES]
-    if price is not None and t.status != "closed":
+    d["reasons"] = [MODULES[m][0] for m in t.reasons if m in MODULES] or [x for x in t.notes.split(" · ") if x]
+    if price is not None and t.status == "pending":
+        d["price"], d["r_open"] = price, None
+    elif price is not None and t.status != "closed":
         frac = 0.5 if t.status == "tp1" else 0.0
         d["price"] = price
         d["r_open"] = round(t.r_gross * (1 if frac else 0) + (1 - frac) * t.side * (price - t.entry) / t.risk, 2)
@@ -116,7 +122,7 @@ def _pub(t: Trade, price: float | None = None) -> dict:
 
 
 def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_ev, macro_state=None, crowd=None,
-               fng_value=None, liq=None):
+               fng_value=None, liq=None, radar=None):
     """state/app_signals.json — данные для вкладки «Сигналы» в мини-приложении marketnews999."""
     import json
 
@@ -144,6 +150,8 @@ def export_app(cfg, now, still_open, hist, prices, provider, n_coins, blackout_e
         "crowd": crowd or [],
         "fng": None if fng_value is None or pd.isna(fng_value) else int(fng_value),
         "liqmap": liq,
+        "strategy": cfg.get("strategy", {}).get("mode", "trend"),
+        "radar": radar or [],
     }
     (store.STATE_DIR / "app_signals.json").write_text(json.dumps(data, ensure_ascii=False, default=str), encoding="utf-8")
 
@@ -216,7 +224,9 @@ def main():
                 tg.broadcast(chats(), event_text(t, ev), reply_map=t.msg_ids, on_blocked=drop_chat)
             if t.status == "closed":
                 break
-        if t.status == "closed":
+        if t.exit_reason == "expired":
+            log.info("Лимит %s #%s отменён — ретеста не было", t.symbol, t.id)
+        elif t.status == "closed":
             hist["closed"].append(t.to_dict())
             log.info("Закрыт %s #%s: %s %+.2fR", t.symbol, t.id, t.exit_reason, t.r_gross)
         else:
@@ -258,7 +268,9 @@ def main():
     btc_h1 = split_closed(kC["BTC"], now)[0] if "BTC" in kC else None
     max_age = pd.Timedelta(minutes=sc.get("max_signal_age_minutes", 75))
     open_syms = {t.symbol for t in still_open}
-    candidates = []
+    candidates, radar, alerts = [], [], []
+    bc = cfg.get("breakout", {})
+    sig.setdefault("setup_alerts", {})
     for b in bases:
         df, h = kE.get(b), kC.get(b)
         if df is None or h is None or len(df) < 260:
@@ -273,6 +285,15 @@ def main():
         fresh = tail[(tail["signal"] != 0) & (tail["close_time"] > last_seen)
                      & (now - tail["close_time"] <= max_age)]
         sig["last_bar"][b] = out["close_time"].iloc[-1].isoformat()
+        last = out.iloc[-1]
+        if int(last.get("bo_armed", 0) or 0) != 0 and now - last["close_time"] <= max_age:
+            item = {"symbol": b, "side": "LONG" if last["bo_armed"] > 0 else "SHORT", "level": float(last["bo_level"]),
+                    "price": float(last_price), "score": round(float(last["bo_pre"]), 0),
+                    "touches": int(last["bo_touches"]), "notes": str(last["bo_notes"])}
+            radar.append(item)
+            key = f"{b}|{item['side']}|{item['level']:.6g}"
+            if key not in sig["setup_alerts"] and b not in open_syms:
+                alerts.append((item["score"], key, b, last, last_price))
         if fresh.empty or b in open_syms or bo:
             continue
         cd = sig["cooldown"].get(b)
@@ -284,7 +305,11 @@ def main():
             log.info("%s: стоп слишком узкий, комиссии %.2fR — пропуск", b, t.cost_r)
             continue
         drift = t.side * (last_price - t.entry) / t.risk
-        if not -0.5 < drift < 0.5:
+        if t.status == "pending":
+            if not -1.0 < drift < cfg["risk"]["tp1_r"]:  # к моменту отправки уже стоп или уже у TP1
+                log.info("%s: лимит неактуален (%.2fR) — пропуск", b, drift)
+                continue
+        elif not -0.5 < drift < 0.5:
             log.info("%s: цена уже ушла (%.2fR) — пропуск", b, drift)
             continue
         nctx = nw.context(news_data, now, b)
@@ -294,6 +319,17 @@ def main():
                 log.info("%s: против свежей официальной новости «%s» — пропуск", b, why)
                 continue
         candidates.append((float(row["conf"]), t, row, nctx))
+
+    # «👀 Готовится пробой» — лучшие свежие сетапы, один раз на уровень за 24ч
+    alerts.sort(key=lambda x: x[0], reverse=True)
+    if not bo:
+        for _, key, b, last, lp in alerts[:int(bc.get("max_alerts_per_run", 3))]:
+            tg.broadcast(chats(), setup_alert_text(b, last, lp, cfg), on_blocked=drop_chat)
+            sig["setup_alerts"][key] = now.isoformat()
+            log.info("Сетап на радаре: %s", key)
+    edge_ = now - pd.Timedelta(hours=24)
+    sig["setup_alerts"] = {k: v for k, v in sig["setup_alerts"].items() if pd.Timestamp(v) > edge_}
+    radar.sort(key=lambda x: -x["score"])
 
     candidates.sort(key=lambda x: x[0], reverse=True)
     slots = max(0, min(sc["max_signals_per_run"], sc["max_open_signals"] - len(still_open)))
@@ -306,7 +342,8 @@ def main():
         t.msg_ids = tg.broadcast(chats(), text, on_blocked=drop_chat)
         still_open.append(t)
         sig["cooldown"][t.symbol] = (now + timedelta(minutes=sc["cooldown_minutes"])).isoformat()
-        log.info("СИГНАЛ %s %s conf=%.0f", t.symbol, "LONG" if t.side > 0 else "SHORT", t.conf)
+        log.info("СИГНАЛ %s %s %s conf=%.0f%s", t.symbol, t.kind, "LONG" if t.side > 0 else "SHORT", t.conf,
+                 " (лимит)" if t.status == "pending" else "")
     log.info("Кандидатов: %d, отправлено: %d, открыто: %d", len(candidates), min(len(candidates), slots), len(still_open))
 
     # ---------------------------------------------- 3. утренний «План дня»
@@ -329,7 +366,7 @@ def main():
         try:
             text = br.morning_text(now, cfg, news_data, crowd_rows, [_pub(t, prices.get(t.symbol)) for t in still_open],
                                    summarize(_closed_since(hist, 1), "r_gross"),
-                                   summarize(_closed_since(hist, 7), "r_gross"), macro_state, liq)
+                                   summarize(_closed_since(hist, 7), "r_gross"), macro_state, liq, radar)
             tg.broadcast(chats(), text, on_blocked=drop_chat)
             log.info("План дня отправлен")
         except Exception as e:  # noqa: BLE001
@@ -340,7 +377,7 @@ def main():
     store.save("signals", sig)
     try:
         export_app(cfg, now, still_open, hist, prices, provider.name, len(bases), bo, macro_state, crowd_rows,
-                   (fng["fng"].iloc[-1] if fng is not None and len(fng) else None), liq)
+                   (fng["fng"].iloc[-1] if fng is not None and len(fng) else None), liq, radar)
     except Exception as e:  # noqa: BLE001
         log.warning("Экспорт для мини-приложения: %s", e)
     store.save("history", hist)

@@ -141,6 +141,8 @@ def macro_line(row: pd.Series, side: int, cfg: dict) -> str:
 
 
 def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: int, nctx: dict | None = None) -> str:
+    if t.kind == "breakout":
+        return breakout_text(t, row, provider, cfg, nctx)
     rk, tf = cfg["risk"], cfg["timeframes"]
     side = "🟢 <b>LONG" if t.side > 0 else "🔴 <b>SHORT"
     sl_pct = pct(t.entry, t.sl)
@@ -176,7 +178,79 @@ def signal_text(t: Trade, row: pd.Series, provider: str, cfg: dict, n_modules: i
     )
 
 
+def _pattern(side: int, hl) -> str:
+    from .setups import pattern_name
+
+    return pattern_name(side, bool(hl) if hl is not None and pd.notna(hl) else False)
+
+
+def breakout_text(t: Trade, row: pd.Series, provider: str, cfg: dict, nctx: dict | None = None) -> str:
+    """Сигнал v4: подтверждённый пробой заранее найденного паттерна."""
+    from .setups import bcfg
+
+    rk, tf, bc = cfg["risk"], cfg["timeframes"], bcfg(cfg)
+    side = "🟢 <b>LONG" if t.side > 0 else "🔴 <b>SHORT"
+    sl_pct = pct(t.entry, t.sl)
+    size = rk["risk_per_trade_pct"] / abs(sl_pct) * 100
+    tz = cfg.get("telegram", {}).get("timezone", "Europe/Moscow")
+    tzl = {"Europe/Moscow": "МСК", "UTC": "UTC"}.get(tz, tz)
+    ctime = pd.Timestamp(t.opened).ceil("min").tz_convert(tz).strftime("%d.%m %H:%M")
+    btc = "" if t.symbol == "BTC" else f" · BTC: {ARROW[int(row.get('btc_htf_bias', 0))]}"
+    word = "сопротивления" if t.side > 0 else "поддержки"
+    if t.status == "pending":
+        till = pd.Timestamp(t.expires).ceil("min").tz_convert(tz).strftime("%d.%m %H:%M")
+        entry = (f"Вход: <b>лимит</b> <code>{fp(t.entry)}</code> — ретест пробитого уровня "
+                 f"(свеча ушла далеко, не догоняем)\nДействует до {till} {tzl}, иначе отмена\n")
+    else:
+        entry = f"Вход: <code>{fp(t.entry)}</code> (по рынку, у уровня)\n"
+    tgt = (f"🎯 Цель по высоте паттерна: <code>{fp(t.target)}</code> ({pct(t.entry, t.target):+.2f}%)\n"
+           if t.target else "")
+    test = ("🧪 <b>ТЕСТ</b> — сигнал для проверки стратегии, не для торговли\n\n"
+            if cfg.get("telegram", {}).get("test_mode") else "")
+    notes = "\n".join(f"• {html.escape(x)}" for x in t.notes.split(" · ") if x)
+    return (
+        f"{test}{side} · {html.escape(t.symbol)}/USDT</b> · {tf['entry'].upper()}\n"
+        f"📐 <b>Пробой</b>: {_pattern(t.side, row.get('bo_hl'))}\n"
+        f"Сила сетапа: <b>{t.conf:.0f}/100</b> {bar(t.conf)} (порог {bc['min_score']})\n"
+        f"{tf['confirm'].upper()}: {ARROW[int(row['htf_bias'])]}{btc}\n\n"
+        f"Уровень {word}: <code>{fp(t.level)}</code> — свеча закрылась за ним с объёмом\n"
+        f"{entry}"
+        f"Стоп: <code>{fp(t.sl)}</code> ({sl_pct:+.2f}%) — за базой паттерна\n"
+        f"TP1: <code>{fp(t.tp1)}</code> ({pct(t.entry, t.tp1):+.2f}%) · {rk['tp1_r']}R — закрыть "
+        f"{int(rk['tp1_close_frac'] * 100)}%, стоп в б/у\n"
+        f"Остаток: трейлинг {rk.get('trail_atr', 3.0):g}×ATR (≈ {fp(rk.get('trail_atr', 3.0) * t.atr)})\n"
+        f"{tgt}\n"
+        f"✅ Сетап:\n{notes}\n\n"
+        f"{crowd_line(row)}{macro_line(row, t.side, cfg)}{news_line(nctx, cfg)}"
+        f"💼 Риск {rk['risk_per_trade_pct']:g}% депо → позиция ≈ {size:.0f}% депо\n"
+        f"⏳ Макс. {rk['ttl_hours']}ч · свеча {ctime} {tzl} · {provider} · #{t.id}\n"
+        f"<i>Не финансовый совет.</i>"
+    )
+
+
+def setup_alert_text(symbol: str, row: pd.Series, price: float, cfg: dict) -> str:
+    """Предупреждение «готовится пробой»: паттерн сформирован, цена у уровня, входа ещё нет."""
+    side = int(row["bo_armed"])
+    lvl = float(row["bo_level"])
+    word = "сопротивление" if side > 0 else "поддержку"
+    dist = pct(price, lvl)
+    test = "🧪 ТЕСТ · " if cfg.get("telegram", {}).get("test_mode") else ""
+    notes = "\n".join(f"• {html.escape(x)}" for x in str(row.get("bo_notes", "")).split(" · ") if x)
+    return (
+        f"👀 {test}<b>Готовится пробой</b> · {'🟢' if side > 0 else '🔴'} {html.escape(symbol)}/USDT · "
+        f"{cfg['timeframes']['entry'].upper()}\n"
+        f"{_pattern(side, row.get('bo_hl')).capitalize()}: цена жмёт {word} <code>{fp(lvl)}</code> "
+        f"({dist:+.2f}% от цены)\n"
+        f"Оценка сетапа: <b>{float(row['bo_pre']):.0f}/100</b>\n{notes}\n\n"
+        f"Сигнал на вход придёт ТОЛЬКО если свеча {cfg['timeframes']['entry'].upper()} закроется "
+        f"{'выше' if side > 0 else 'ниже'} уровня с объёмом. Заранее не входим.\n"
+        f"<i>Не финансовый совет.</i>"
+    )
+
+
 EVENT_TEXT = {
+    "filled": "📥 <b>Лимит исполнен</b> — цена вернулась к уровню, сделка открыта",
+    "expired": "🚫 <b>Лимит отменён</b> — ретеста не было, сделка не открылась (в статистику не идёт)",
     "tp1": "✅ <b>TP1 взят</b> ({r:+.2f}R) — фиксируем часть, стоп в безубыток",
     "tp2": "🎯 <b>TP2 взят</b> — сделка закрыта: <b>{r:+.2f}R</b>",
     "sl": "❌ <b>Стоп</b> — сделка закрыта: <b>{r:+.2f}R</b>",

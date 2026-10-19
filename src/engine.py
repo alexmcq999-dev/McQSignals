@@ -17,6 +17,7 @@ from dataclasses import asdict, dataclass, field
 import numpy as np
 import pandas as pd
 
+from . import setups
 from .strategies import CONTRARIAN, MODULES, all_votes, build_features
 
 REGIME_WEIGHTS = {
@@ -78,6 +79,13 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
             ok &= (htf * direction) >= 0  # достаточно, чтобы не был против
     if not is_btc and sc.get("btc_mode", "penalty") == "block":
         ok &= (btc * direction) >= 0  # альты не торгуем против тренда BTC 1H
+    # v4: не догонять — трендовый вход только если цена не улетела от EMA20 и RSI не на экстремуме
+    if sc.get("max_ext_atr"):
+        ext = (f["close"] - f["ema20"]) / f["atr"]
+        ok &= (ext * direction) <= float(sc["max_ext_atr"])
+    if sc.get("rsi_cap"):
+        cap = float(sc["rsi_cap"])
+        ok &= ~(((direction > 0) & (f["rsi"] > cap)) | ((direction < 0) & (f["rsi"] < 100 - cap)))
     sides = sc.get("sides", "both")
     cond_long = ok & (direction > 0) & (sides != "short_only")
     cond_short = ok & (direction < 0) & (sides != "long_only")
@@ -86,15 +94,9 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
         cond_short &= (htf == -1) & ((btc == -1) if not is_btc else True)
     # Фильтры «не идти за толпой» для трендовых сигналов
     cr = cfg.get("contrarian", {})
-    if cr.get("crowd_filter", False) and "ls_acc_z" in f:
-        z = f["ls_acc_z"].fillna(0)
-        lim = cr.get("crowd_filter_z", 2.0)
-        cond_long &= ~(z >= lim)    # толпа и так перегружена лонгами — не присоединяемся
-        cond_short &= ~(z <= -lim)
-    if cr.get("fng_filter", False) and "fng" in f:
-        g = f["fng"]
-        cond_long &= ~(g >= cr.get("fng_greed", 80))
-        cond_short &= ~(g <= cr.get("fng_fear", 20))
+    crowd_long, crowd_short = crowd_ok(f, cfg)
+    cond_long &= crowd_long
+    cond_short &= crowd_short
     if mmode == "block":
         cond_long &= ~(mb < 0)   # доллар растёт при активной связи — лонги против макро
         cond_short &= ~(mb > 0)
@@ -128,7 +130,30 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
         c_conf = (cr.get("base_conf", 60) + 10 * pd.Series(n_conf, index=f.index)).clip(0, 100)
         conf = conf.where(~(c_long | c_short), c_conf)
 
+    # ---- v4: пробойные сетапы (src/setups.py)
+    smode = cfg.get("strategy", {}).get("mode", "trend")
+    bo = None
+    if smode in ("breakout", "both"):
+        bo = setups.detect(f, cfg, is_btc=is_btc)
+        if smode == "breakout":
+            trig_long = trig_long & False
+            trig_short = trig_short & False
+            kind[:] = ""
+        bsig = bo["bo_signal"]
+        b_long = (bsig > 0) & crowd_long & ~(trig_long | trig_short)
+        b_short = (bsig < 0) & crowd_short & ~(trig_long | trig_short)
+        if mmode == "block":
+            b_long &= ~(mb < 0)
+            b_short &= ~(mb > 0)
+        trig_long = trig_long | b_long
+        trig_short = trig_short | b_short
+        kind[b_long | b_short] = "breakout"
+        conf = conf.where(~(b_long | b_short), bo["bo_score"])
+
     out = f.copy()
+    if bo is not None:
+        for col in bo.columns:
+            out[col] = bo[col]
     out["regime"] = regime
     out["score"] = raw
     out["conf"] = conf
@@ -140,6 +165,23 @@ def score_frame(f: pd.DataFrame, cfg: dict, is_btc: bool = False) -> pd.DataFram
     for m in CONTRARIAN:
         out["v_" + m] = cvotes[m]
     return out
+
+
+def crowd_ok(f: pd.DataFrame, cfg: dict) -> tuple[pd.Series, pd.Series]:
+    """Фильтры «не идти за толпой»: (можно лонг, можно шорт) на каждую свечу."""
+    cr = cfg.get("contrarian", {})
+    ok_l = pd.Series(True, index=f.index)
+    ok_s = pd.Series(True, index=f.index)
+    if cr.get("crowd_filter", False) and "ls_acc_z" in f:
+        z = f["ls_acc_z"].fillna(0)
+        lim = cr.get("crowd_filter_z", 2.0)
+        ok_l &= ~(z >= lim)    # толпа и так перегружена лонгами — не присоединяемся
+        ok_s &= ~(z <= -lim)
+    if cr.get("fng_filter", False) and "fng" in f:
+        g = f["fng"]
+        ok_l &= ~(g >= cr.get("fng_greed", 80))
+        ok_s &= ~(g <= cr.get("fng_fear", 20))
+    return ok_l, ok_s
 
 
 def analyze(df: pd.DataFrame, htf: pd.DataFrame | None, btc_htf: pd.DataFrame | None, cfg: dict, is_btc=False,
@@ -162,12 +204,17 @@ class Trade:
     conf: float = 0.0
     regime: str = ""
     reasons: list = field(default_factory=list)
-    kind: str = "trend"  # trend | contra
+    kind: str = "trend"  # trend | contra | breakout
     macro: str = ""      # with | against | neutral — положение сделки относительно макро-режима
     cost_r: float = 0.0  # издержки туда-обратно в R
     atr: float = 0.0     # ATR на входе (для трейлинга)
     peak: float = 0.0    # лучшая цена с момента входа (для трейлинга)
-    status: str = "open"  # open | tp1 | closed
+    status: str = "open"  # pending (ждём лимит) | open | tp1 | closed
+    expires: str = ""    # pending: до какого времени ждём ретест
+    filled: str = ""     # когда исполнился лимит (TTL считаем отсюда)
+    level: float = 0.0   # breakout: пробитый уровень
+    target: float = 0.0  # breakout: цель по высоте паттерна (measured move)
+    notes: str = ""      # breakout: из чего сложилась оценка
     exit_reason: str = ""
     r_gross: float = 0.0
     r_net: float = 0.0
@@ -187,9 +234,14 @@ class Trade:
 
 def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float | None = None) -> Trade:
     rk = cfg["risk"]
-    e = float(entry if entry is not None else row["close"])
+    kind = str(row.get("kind", "") or "trend")
+    limit = row.get("bo_limit") if kind == "breakout" else None
+    pending = entry is None and limit is not None and pd.notna(limit)
+    e = float(entry if entry is not None else (limit if pending else row["close"]))
     a = float(row["atr"])
-    if side > 0:
+    if kind == "breakout" and pd.notna(row.get("bo_stop")):
+        dist = side * (e - float(row["bo_stop"]))  # стоп за базой паттерна
+    elif side > 0:
         struct = float(row["swing_lo"]) - rk["sl_swing_buffer_atr"] * a
         dist = e - struct
     else:
@@ -199,13 +251,27 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
     dist = min(dist, e * rk["sl_max_pct"] / 100)
     dist = max(dist, e * rk.get("sl_min_pct", 0.0) / 100)  # слишком узкий стоп съедается комиссией
     sl = e - side * dist
-    kind = str(row.get("kind", "") or "trend")
-    pool = CONTRARIAN if kind == "contra" else [m for m in MODULES if m not in CONTRARIAN]
-    reasons = [m for m in pool if ("v_" + m) in row and row["v_" + m] * side > 0.3]
+    if kind == "breakout":
+        reasons = []
+    else:
+        pool = CONTRARIAN if kind == "contra" else [m for m in MODULES if m not in CONTRARIAN]
+        reasons = [m for m in pool if ("v_" + m) in row and row["v_" + m] * side > 0.3]
     mb = row.get("macro_bias", 0)
     mb = 0.0 if mb is None or pd.isna(mb) else float(mb)
     macro = "" if cfg.get("macro", {}).get("mode", "off") == "off" else \
         ("with" if mb * side > 0 else "against" if mb * side < 0 else "neutral")
+    opened = pd.Timestamp(row["close_time"])
+    extra = {}
+    if kind == "breakout":
+        from .config import TF_MINUTES
+
+        bc = setups.bcfg(cfg)
+        extra = {"level": float(row["bo_level"]), "target": float(row["bo_target"]),
+                 "notes": str(row.get("bo_notes", "") or "")}
+        if pending:
+            tfm = TF_MINUTES.get(cfg["timeframes"]["entry"], 60)
+            extra.update(status="pending",
+                         expires=(opened + pd.Timedelta(minutes=tfm * int(bc["retest_bars"]))).isoformat())
     return Trade(
         symbol=symbol,
         side=side,
@@ -214,7 +280,7 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
         tp1=e + side * rk["tp1_r"] * dist,
         tp2=e + side * rk["tp2_r"] * dist,
         risk=dist,
-        opened=pd.Timestamp(row["close_time"]).isoformat(),
+        opened=opened.isoformat(),
         conf=round(float(row["conf"]), 1),
         regime=str(row["regime"]),
         reasons=reasons,
@@ -223,6 +289,7 @@ def make_trade(row: pd.Series, side: int, symbol: str, cfg: dict, entry: float |
         cost_r=round(2 * cost_pct(cfg) / 100 * e / dist, 4),
         atr=a,
         peak=e,
+        **extra,
     )
 
 
@@ -239,7 +306,11 @@ def trade_ok(t: Trade, cfg: dict) -> bool:
 
 
 def update_trade(t: Trade, bar, cfg: dict, fee_pct: float = 0.0) -> list[str]:
-    """Прогоняет одну свечу через сделку. События: tp1, tp2, sl, be, trail, timeout.
+    """Прогоняет одну свечу через сделку. События: filled, expired, tp1, tp2, sl, be, trail, timeout.
+
+    pending (лимит на ретест уровня): исполняется, когда цена вернулась к лимиту. В свече исполнения
+    проверяется только стоп (консервативно: тейк в той же свече не засчитываем). Если до истечения
+    цена так и не вернулась или ушла до TP1 без нас — expired (в статистику не идёт).
 
     exit_mode = fixed: 50% на TP1 (стоп в б/у), остаток на TP2.
     exit_mode = trail: 50% на TP1 (стоп в б/у), остаток ведётся трейлинг-стопом
@@ -254,7 +325,6 @@ def update_trade(t: Trade, bar, cfg: dict, fee_pct: float = 0.0) -> list[str]:
     trail = rk.get("exit_mode", "fixed") == "trail"
     hi, lo, cl = float(bar["high"]), float(bar["low"]), float(bar["close"])
     now = pd.Timestamp(bar["close_time"])
-    t.bars_held += 1
     t.last_checked = now.isoformat()
     ev: list[str] = []
 
@@ -263,7 +333,24 @@ def update_trade(t: Trade, bar, cfg: dict, fee_pct: float = 0.0) -> list[str]:
             return lo <= level if adverse else hi >= level
         return hi >= level if adverse else lo <= level
 
-    if t.status == "open":
+    if t.status == "pending":
+        if hit(t.entry, True):
+            t.status, t.filled, t.peak = "open", now.isoformat(), t.entry
+            ev.append("filled")
+            if hit(t.sl, True):
+                t.r_gross, t.exit_reason = -1.0, "sl"
+                ev.append("sl")
+            else:
+                return ev
+        elif hit(t.tp1, False) or (t.expires and now >= pd.Timestamp(t.expires)):
+            t.status, t.exit_reason, t.closed = "closed", "expired", now.isoformat()
+            t.r_gross = t.r_net = 0.0
+            return ["expired"]
+        else:
+            return ev
+    t.bars_held += 1
+
+    if t.status == "open" and not t.exit_reason:
         if hit(t.sl, True):
             t.r_gross, t.exit_reason = -1.0, "sl"
             ev.append("sl")
@@ -291,7 +378,7 @@ def update_trade(t: Trade, bar, cfg: dict, fee_pct: float = 0.0) -> list[str]:
             level = t.peak - t.side * rk.get("trail_atr", 3.0) * t.atr
             t.sl = max(t.sl, level) if t.side > 0 else min(t.sl, level)
 
-    if not t.exit_reason and now - pd.Timestamp(t.opened) >= pd.Timedelta(hours=rk["ttl_hours"]):
+    if not t.exit_reason and now - pd.Timestamp(t.filled or t.opened) >= pd.Timedelta(hours=rk["ttl_hours"]):
         remaining = 1.0 if t.status == "open" else (1 - frac)
         t.r_gross += remaining * t.side * (cl - t.entry) / t.risk
         t.exit_reason = "timeout"
