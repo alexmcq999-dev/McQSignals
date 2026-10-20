@@ -662,3 +662,27 @@ def test_trend_pullback_limit(cfg):
     txt = signal_text(t, row, "Fake", pb, 11)
     assert "лимит" in txt and "не догоняем" in txt
     assert make_trade(row, side, "X", cfg).status == "open"  # market — как раньше
+
+
+def test_push_messages(monkeypatch):
+    """Пуши: без ключей — ничего не отправляем; с ключами — короткие RU/EN тексты без HTML."""
+    from src import push
+
+    sent = []
+    monkeypatch.setattr(push.requests, "post", lambda url, **kw: sent.append((url, kw["json"])) or type("R", (), {"status_code": 200, "text": "{}"})())
+    monkeypatch.delenv("ONESIGNAL_APP_ID", raising=False)
+    monkeypatch.delenv("ONESIGNAL_API_KEY", raising=False)
+    t = Trade(symbol="SOL", side=1, entry=182.4, sl=176.9, tp1=190.65, tp2=0, risk=5.5, opened="2026-10-19T10:59:59+00:00")
+    push.new_signal(t)
+    assert not sent
+    monkeypatch.setenv("ONESIGNAL_APP_ID", "app")
+    monkeypatch.setenv("ONESIGNAL_API_KEY", "key")
+    push.new_signal(t)
+    t.r_gross = -1.0
+    push.trade_event(t, "sl")
+    push.event_alert("⚠️ <b>Через 30 мин</b> (16:30): 🇺🇸 <b>USD</b> CPI\nпрогноз 2.9%")
+    body = sent[0][1]
+    assert body["headings"]["ru"] == "🟢 Покупка SOL" and "стоп 176.9" in body["contents"]["ru"]
+    assert body["contents"]["en"].startswith("Entry 182.4") and body["url"].endswith("#signals")
+    assert sent[1][1]["contents"]["ru"].endswith("-1.00R")
+    assert "<" not in sent[2][1]["contents"]["ru"] and sent[2][1]["url"].endswith("#calendar")

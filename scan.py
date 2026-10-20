@@ -17,6 +17,7 @@ from src import crowd as cw
 from src import liqmap as lm
 from src import macro as mc
 from src import news as nw
+from src import push
 from src import store
 from src.config import TF_MINUTES, load_config
 from src.data import build_universe, fetch_many, pick_provider, split_closed
@@ -222,6 +223,7 @@ def main():
                 if ev == "tp1" and "tp2" in evs:
                     continue
                 tg.broadcast(chats(), event_text(t, ev), reply_map=t.msg_ids, on_blocked=drop_chat)
+                push.trade_event(t, ev)
             if t.status == "closed":
                 break
         if t.exit_reason == "expired":
@@ -261,6 +263,7 @@ def main():
     news_data = nw.load(cfg)
     for text in br.event_alerts(news_data, now, sig, cfg, still_open):
         tg.broadcast(chats(), text, on_blocked=drop_chat)
+        push.event_alert(text)
         log.info("Алерт о событии отправлен")
     bo = nw.blackout(news_data, now, cfg)
     if bo:
@@ -325,6 +328,7 @@ def main():
     if not bo:
         for _, key, b, last, lp in alerts[:int(bc.get("max_alerts_per_run", 3))]:
             tg.broadcast(chats(), setup_alert_text(b, last, lp, cfg), on_blocked=drop_chat)
+            push.setup_alert(b, int(last["bo_armed"]), float(last["bo_level"]))
             sig["setup_alerts"][key] = now.isoformat()
             log.info("Сетап на радаре: %s", key)
     edge_ = now - pd.Timedelta(hours=24)
@@ -340,6 +344,7 @@ def main():
         n_mod = len(cr.get("confirm", [])) + 1 if t.kind == "contra" else len(sc.get("modules", MODULES))
         text = signal_text(t, row, provider.name, cfg, n_mod, nctx)
         t.msg_ids = tg.broadcast(chats(), text, on_blocked=drop_chat)
+        push.new_signal(t)
         still_open.append(t)
         sig["cooldown"][t.symbol] = (now + timedelta(minutes=sc["cooldown_minutes"])).isoformat()
         log.info("СИГНАЛ %s %s %s conf=%.0f%s", t.symbol, t.kind, "LONG" if t.side > 0 else "SHORT", t.conf,
@@ -368,6 +373,7 @@ def main():
                                    summarize(_closed_since(hist, 1), "r_gross"),
                                    summarize(_closed_since(hist, 7), "r_gross"), macro_state, liq, radar)
             tg.broadcast(chats(), text, on_blocked=drop_chat)
+            push.morning()
             log.info("План дня отправлен")
         except Exception as e:  # noqa: BLE001
             log.warning("План дня: %s", e)
