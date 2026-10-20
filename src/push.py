@@ -30,7 +30,9 @@ def send(title: dict, body: dict, path: str = "#signals", topic: str = "signals"
             json={"app_id": os.environ["ONESIGNAL_APP_ID"],
                   "included_segments": [os.getenv("ONESIGNAL_SEGMENT") or "Total Subscriptions"],
                   "headings": {k: v for k, v in title.items() if v}, "contents": {k: v for k, v in body.items() if v},
-                  "url": APP_URL + path, "web_push_topic": topic, "ttl": ttl})
+                  "url": APP_URL + path, "web_push_topic": topic, "ttl": ttl,
+                  # высокий приоритет: iOS иначе может придержать пуш до «удобного» момента
+                  "priority": 10})
         if r.status_code >= 300:
             log.warning("OneSignal %s: %s", r.status_code, r.text[:200])
     except Exception as e:  # noqa: BLE001 — пуш не должен ломать сканер
