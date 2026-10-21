@@ -13,7 +13,7 @@ import re
 import requests
 
 log = logging.getLogger("push")
-APP_URL = os.getenv("WEBAPP_URL", "https://alexmcq999-dev.github.io/marketnews999/").rstrip("/") + "/"
+APP_URL = os.getenv("WEBAPP_URL", "https://mcqcryptonews.pages.dev/").rstrip("/") + "/"
 
 
 def enabled() -> bool:

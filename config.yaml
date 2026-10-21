@@ -118,7 +118,7 @@ liqmap:
 # Новостной фон из бота marketnews999 (только в боевом режиме: на истории не проверить)
 news:
   enabled: true
-  url: https://alexmcq999-dev.github.io/marketnews999/data/app.json
+  url: https://mcqcryptonews.pages.dev/data/app.json
   calendar_blackout_minutes: 45  # не давать новые сигналы за 45 мин до и после High-impact макро-события
   show_in_signal: true           # показывать новостной фон в сообщении
   against_news_filter: false     # не открывать сделку против свежего (≤ 12ч) официального 🏛 события
