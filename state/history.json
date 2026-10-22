@@ -744,6 +744,49 @@
     "6542171685": 155,
     "278119034": 156
    }
+  },
+  {
+   "symbol": "BTC",
+   "side": 1,
+   "entry": 83826.01,
+   "sl": 82895.94914366101,
+   "tp1": 85221.10128450848,
+   "tp2": 86616.19256901696,
+   "risk": 930.0608563389886,
+   "opened": "2026-10-21T13:59:59.999000+00:00",
+   "conf": 71.8,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.1352,
+   "atr": 372.02434253559545,
+   "peak": 84898.0,
+   "status": "closed",
+   "expires": "",
+   "filled": "",
+   "level": 0.0,
+   "target": 0.0,
+   "notes": "",
+   "exit_reason": "sl",
+   "r_gross": -1.0,
+   "r_net": -1.0,
+   "closed": "2026-10-22T02:29:59.999000+00:00",
+   "last_checked": "2026-10-22T02:29:59.999000+00:00",
+   "bars_held": 50,
+   "id": "0021",
+   "msg_ids": {
+    "6542171685": 189,
+    "278119034": 190
+   }
   }
  ]
 }
