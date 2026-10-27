@@ -35,55 +35,12 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-10-27T15:14:59.999000+00:00",
-   "bars_held": 81,
+   "last_checked": "2026-10-27T15:29:59.999000+00:00",
+   "bars_held": 82,
    "id": "0022",
    "msg_ids": {
     "6542171685": 205,
     "278119034": 206
-   }
-  },
-  {
-   "symbol": "BTC",
-   "side": -1,
-   "entry": 79818.02,
-   "sl": 80650.57052912157,
-   "tp1": 78569.19420631765,
-   "tp2": 77320.3684126353,
-   "risk": 832.5505291215668,
-   "opened": "2026-10-27T02:59:59.999000+00:00",
-   "conf": 73.1,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "pullback",
-    "macd",
-    "rsi_regime",
-    "stoch_rsi",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.1438,
-   "atr": 387.8821164862633,
-   "peak": 79506.0,
-   "status": "open",
-   "expires": "",
-   "filled": "",
-   "level": 0.0,
-   "target": 0.0,
-   "notes": "",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-27T15:14:59.999000+00:00",
-   "bars_held": 49,
-   "id": "0023",
-   "msg_ids": {
-    "6542171685": 207,
-    "278119034": 208
    }
   }
  ],
