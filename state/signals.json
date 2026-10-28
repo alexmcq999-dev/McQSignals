@@ -1,49 +1,5 @@
 {
- "open": [
-  {
-   "symbol": "SOL",
-   "side": -1,
-   "entry": 100.44,
-   "sl": 102.6669923414037,
-   "tp1": 97.09951148789446,
-   "tp2": 93.75902297578891,
-   "risk": 2.2269923414036956,
-   "opened": "2026-10-26T18:59:59.999000+00:00",
-   "conf": 76.1,
-   "regime": "trend",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "pullback",
-    "macd",
-    "rsi_regime",
-    "stoch_rsi",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.0677,
-   "atr": 0.8907969365614783,
-   "peak": 99.16,
-   "status": "open",
-   "expires": "",
-   "filled": "",
-   "level": 0.0,
-   "target": 0.0,
-   "notes": "",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-10-28T08:14:59.999000+00:00",
-   "bars_held": 149,
-   "id": "0022",
-   "msg_ids": {
-    "6542171685": 205,
-    "278119034": 206
-   }
-  }
- ],
+ "open": [],
  "last_bar": {
   "BTC": "2026-10-28T07:59:59.999000+00:00",
   "ETH": "2026-10-28T07:59:59.999000+00:00",
