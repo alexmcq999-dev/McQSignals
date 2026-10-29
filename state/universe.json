@@ -1,135 +1,135 @@
 {
- "updated": "2026-10-28T21:46:06+00:00",
+ "updated": "2026-10-29T10:01:05+00:00",
  "v": 2,
- "updated_ts": 1793223966.370484,
+ "updated_ts": 1793268065.9205296,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1631313428626,
-   "qvol": 1050207741.7630258
+   "mcap": 1611007071493,
+   "qvol": 1137988101.2268085
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 288087808057,
-   "qvol": 407988135.594196
+   "mcap": 283369160633,
+   "qvol": 483772148.801417
   },
   {
    "base": "SOL",
    "name": "Solana",
-   "mcap": 60339643723,
-   "qvol": 187145862.19494
+   "mcap": 59118455098,
+   "qvol": 200066618.88321
   },
   {
    "base": "ZEC",
    "name": "Zcash",
-   "mcap": 22041402169,
-   "qvol": 146748329.38887
-  },
-  {
-   "base": "PEPE",
-   "name": "Pepe",
-   "mcap": 2132489185,
-   "qvol": 112730612.34698366
-  },
-  {
-   "base": "XRP",
-   "name": "XRP",
-   "mcap": 84181405005,
-   "qvol": 109401842.75935
+   "mcap": 21311396366,
+   "qvol": 173863318.54062
   },
   {
    "base": "BNB",
    "name": "BNB",
-   "mcap": 99393204339,
-   "qvol": 91998950.81602
+   "mcap": 98495488841,
+   "qvol": 165190028.35728
   },
   {
    "base": "NEAR",
    "name": "NEAR Protocol",
-   "mcap": 6200345595,
-   "qvol": 78294682.4385
+   "mcap": 5723155149,
+   "qvol": 119025164.0798
   },
   {
-   "base": "ENA",
-   "name": "Ethena",
-   "mcap": 2815715799,
-   "qvol": 41661826.446438
+   "base": "XRP",
+   "name": "XRP",
+   "mcap": 81808602999,
+   "qvol": 111467054.57548
   },
   {
-   "base": "DOGE",
-   "name": "Dogecoin",
-   "mcap": 12521802931,
-   "qvol": 37344168.60507
-  },
-  {
-   "base": "SUI",
-   "name": "Sui",
-   "mcap": 3906723215,
-   "qvol": 31993446.13143
-  },
-  {
-   "base": "WLD",
-   "name": "Worldcoin",
-   "mcap": 1635735087,
-   "qvol": 26581001.71322
-  },
-  {
-   "base": "TRX",
-   "name": "TRON",
-   "mcap": 31276289847,
-   "qvol": 26485456.86303
-  },
-  {
-   "base": "UNI",
-   "name": "Uniswap",
-   "mcap": 4537818981,
-   "qvol": 25208370.5764
+   "base": "PEPE",
+   "name": "Pepe",
+   "mcap": 2089776777,
+   "qvol": 105652203.42792849
   },
   {
    "base": "U",
    "name": "United Stables",
-   "mcap": 1629557638,
-   "qvol": 20812150.2607
+   "mcap": 1600741574,
+   "qvol": 45315165.9912
+  },
+  {
+   "base": "ENA",
+   "name": "Ethena",
+   "mcap": 2649690796,
+   "qvol": 40899404.200197
+  },
+  {
+   "base": "SUI",
+   "name": "Sui",
+   "mcap": 3770305119,
+   "qvol": 38755663.04026
+  },
+  {
+   "base": "WLD",
+   "name": "Worldcoin",
+   "mcap": 1560623187,
+   "qvol": 31955469.10756
+  },
+  {
+   "base": "DOGE",
+   "name": "Dogecoin",
+   "mcap": 12239057224,
+   "qvol": 27069521.3617
+  },
+  {
+   "base": "TRX",
+   "name": "TRON",
+   "mcap": 31464555766,
+   "qvol": 26195691.01766
   },
   {
    "base": "LTC",
    "name": "Litecoin",
-   "mcap": 4611920317,
-   "qvol": 20270859.11309
+   "mcap": 4466732234,
+   "qvol": 25926266.35689
   },
   {
-   "base": "HYPE",
-   "name": "Hyperliquid",
-   "mcap": 19379822696,
-   "qvol": 19301384.95741
-  },
-  {
-   "base": "LINK",
-   "name": "Chainlink",
-   "mcap": 9060877988,
-   "qvol": 17186270.83508
-  },
-  {
-   "base": "AAVE",
-   "name": "Aave",
-   "mcap": 2091000822,
-   "qvol": 15843896.29439
+   "base": "UNI",
+   "name": "Uniswap",
+   "mcap": 4399893055,
+   "qvol": 25099138.07905
   },
   {
    "base": "ADA",
    "name": "Cardano",
-   "mcap": 7750019876,
-   "qvol": 15786704.96687
+   "mcap": 7504395158,
+   "qvol": 24653571.43753
+  },
+  {
+   "base": "LINK",
+   "name": "Chainlink",
+   "mcap": 8820262358,
+   "qvol": 20297067.49751
   },
   {
    "base": "PUMP",
    "name": "Pump.fun",
-   "mcap": 2099430685,
-   "qvol": 15432808.484629
+   "mcap": 1964940396,
+   "qvol": 20271456.721435
+  },
+  {
+   "base": "HYPE",
+   "name": "Hyperliquid",
+   "mcap": 18990162270,
+   "qvol": 18429303.89095
+  },
+  {
+   "base": "AVAX",
+   "name": "Avalanche",
+   "mcap": 3873985435,
+   "qvol": 15562453.46494
   }
  ]
 }
