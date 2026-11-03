@@ -1,123 +1,123 @@
 {
- "updated": "2026-11-02T11:46:06+00:00",
+ "updated": "2026-11-03T00:01:05+00:00",
  "v": 2,
- "updated_ts": 1793619966.511913,
+ "updated_ts": 1793664065.9941916,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1564592309701,
-   "qvol": 637782587.4124585
+   "mcap": 1542250124473,
+   "qvol": 983005958.1841127
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 279070148888,
-   "qvol": 457884012.734024
-  },
-  {
-   "base": "SOL",
-   "name": "Solana",
-   "mcap": 55382913749,
-   "qvol": 112634833.57723
+   "mcap": 274940501458,
+   "qvol": 572305617.6371
   },
   {
    "base": "ZEC",
    "name": "Zcash",
-   "mcap": 21227307139,
-   "qvol": 109086340.37202
+   "mcap": 19293327524,
+   "qvol": 201018092.78489
   },
   {
-   "base": "BNB",
-   "name": "BNB",
-   "mcap": 92551337114,
-   "qvol": 69696545.30666
+   "base": "SOL",
+   "name": "Solana",
+   "mcap": 54211370616,
+   "qvol": 177903040.44636
   },
   {
    "base": "NEAR",
    "name": "NEAR Protocol",
-   "mcap": 5415112396,
-   "qvol": 64275600.3669
+   "mcap": 5062808263,
+   "qvol": 100424018.0781
   },
   {
    "base": "XRP",
    "name": "XRP",
-   "mcap": 79132924231,
-   "qvol": 57653930.08077
+   "mcap": 79104427069,
+   "qvol": 94446816.43613
   },
   {
-   "base": "UNI",
-   "name": "Uniswap",
-   "mcap": 4451146149,
-   "qvol": 40517844.50946
-  },
-  {
-   "base": "PEPE",
-   "name": "Pepe",
-   "mcap": 2039779893,
-   "qvol": 34459500.61877922
-  },
-  {
-   "base": "TRX",
-   "name": "TRON",
-   "mcap": 30075883158,
-   "qvol": 30788223.79528
-  },
-  {
-   "base": "HYPE",
-   "name": "Hyperliquid",
-   "mcap": 20546053032,
-   "qvol": 25845390.7496
-  },
-  {
-   "base": "SUI",
-   "name": "Sui",
-   "mcap": 3655610670,
-   "qvol": 22197285.17233
-  },
-  {
-   "base": "LINK",
-   "name": "Chainlink",
-   "mcap": 8626944205,
-   "qvol": 21270707.59754
+   "base": "BNB",
+   "name": "BNB",
+   "mcap": 91823384518,
+   "qvol": 81270975.0927
   },
   {
    "base": "U",
    "name": "United Stables",
-   "mcap": 1606686996,
-   "qvol": 19182181.7163
+   "mcap": 1605438302,
+   "qvol": 64931223.7854
   },
   {
-   "base": "ENA",
-   "name": "Ethena",
-   "mcap": 2388612340,
-   "qvol": 18788318.124315
+   "base": "PEPE",
+   "name": "Pepe",
+   "mcap": 2005961204,
+   "qvol": 47352414.45561195
   },
   {
-   "base": "AAVE",
-   "name": "Aave",
-   "mcap": 2025254176,
-   "qvol": 18477729.86696
+   "base": "HYPE",
+   "name": "Hyperliquid",
+   "mcap": 20105907398,
+   "qvol": 42847057.77733
   },
   {
-   "base": "TRUMP",
-   "name": "Official Trump",
-   "mcap": 461842688,
-   "qvol": 17473705.193174
+   "base": "UNI",
+   "name": "Uniswap",
+   "mcap": 4404908330,
+   "qvol": 42578632.59697
+  },
+  {
+   "base": "TRX",
+   "name": "TRON",
+   "mcap": 30315059549,
+   "qvol": 39196349.3366
   },
   {
    "base": "DOGE",
    "name": "Dogecoin",
-   "mcap": 11786525535,
-   "qvol": 15876366.77445
+   "mcap": 11605788554,
+   "qvol": 26569643.60666
+  },
+  {
+   "base": "ENA",
+   "name": "Ethena",
+   "mcap": 2285036586,
+   "qvol": 25208146.699026
+  },
+  {
+   "base": "LINK",
+   "name": "Chainlink",
+   "mcap": 8522740068,
+   "qvol": 24518128.28088
+  },
+  {
+   "base": "AAVE",
+   "name": "Aave",
+   "mcap": 1952411760,
+   "qvol": 23576601.85394
+  },
+  {
+   "base": "SUI",
+   "name": "Sui",
+   "mcap": 3610673050,
+   "qvol": 21858288.96073
+  },
+  {
+   "base": "WLD",
+   "name": "Worldcoin",
+   "mcap": 1412920914,
+   "qvol": 16686622.81947
   },
   {
    "base": "AVAX",
    "name": "Avalanche",
-   "mcap": 3793672950,
-   "qvol": 15022392.53576
+   "mcap": 3724574072,
+   "qvol": 15516808.23504
   }
  ]
 }
