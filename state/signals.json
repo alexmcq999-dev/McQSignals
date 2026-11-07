@@ -89,7 +89,6 @@
  "last_daily": "2026-11-07",
  "macro_bias": 0,
  "event_alerts": {
-  "2026-10-30T08:30:00+03:00|JPY|BOJ Press Conference": "2026-10-30T05:01:01.470232+00:00",
   "2026-11-03T18:16:00+03:00|USD|Congressional Elections": "2026-11-03T14:46:01.062541+00:00",
   "2026-11-05T15:00:00+03:00|GBP|BOE Monetary Policy Report": "2026-11-05T11:31:01.418398+00:00",
   "2026-11-05T15:00:00+03:00|GBP|Monetary Policy Summary": "2026-11-05T11:31:01.418398+00:00",
