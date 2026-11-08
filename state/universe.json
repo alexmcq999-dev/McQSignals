@@ -1,75 +1,75 @@
 {
- "updated": "2026-11-08T02:16:07+00:00",
+ "updated": "2026-11-08T14:31:07+00:00",
  "v": 2,
- "updated_ts": 1794104167.0429785,
+ "updated_ts": 1794148267.0935812,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1520815785033,
-   "qvol": 400560387.6630365
+   "mcap": 1525059391824,
+   "qvol": 381255108.903538
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 272511291451,
-   "qvol": 139860125.211361
+   "mcap": 273091459127,
+   "qvol": 129791172.790444
   },
   {
    "base": "ZEC",
    "name": "Zcash",
-   "mcap": 21156741996,
-   "qvol": 129777767.34426
-  },
-  {
-   "base": "XRP",
-   "name": "XRP",
-   "mcap": 73472286019,
-   "qvol": 73163659.00581
+   "mcap": 21604122818,
+   "qvol": 104875852.41717
   },
   {
    "base": "SOL",
    "name": "Solana",
-   "mcap": 52568686879,
-   "qvol": 54206784.97003
+   "mcap": 52635751568,
+   "qvol": 55000879.82497
+  },
+  {
+   "base": "XRP",
+   "name": "XRP",
+   "mcap": 73520474733,
+   "qvol": 51119125.21715
   },
   {
    "base": "BNB",
    "name": "BNB",
-   "mcap": 91264480942,
-   "qvol": 35047336.86257
+   "mcap": 91489459804,
+   "qvol": 37206346.01109
   },
   {
    "base": "NEAR",
    "name": "NEAR Protocol",
-   "mcap": 4834571577,
-   "qvol": 33251275.1781
+   "mcap": 4829994419,
+   "qvol": 27527575.5978
   },
   {
    "base": "UNI",
    "name": "Uniswap",
-   "mcap": 4314458820,
-   "qvol": 21836350.14379
-  },
-  {
-   "base": "HYPE",
-   "name": "Hyperliquid",
-   "mcap": 18525468538,
-   "qvol": 19956966.85702
+   "mcap": 4232344938,
+   "qvol": 22080766.77988
   },
   {
    "base": "PEPE",
    "name": "Pepe",
-   "mcap": 2027556185,
-   "qvol": 17550009.32792646
+   "mcap": 2109079167,
+   "qvol": 21801570.4475824
+  },
+  {
+   "base": "HYPE",
+   "name": "Hyperliquid",
+   "mcap": 18509458131,
+   "qvol": 18382969.34533
   },
   {
    "base": "U",
    "name": "United Stables",
-   "mcap": 1610308759,
-   "qvol": 17399978.5629
+   "mcap": 1610553947,
+   "qvol": 15631298.4039
   }
  ]
 }
