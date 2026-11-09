@@ -1,75 +1,93 @@
 {
- "updated": "2026-11-08T14:31:07+00:00",
+ "updated": "2026-11-09T02:46:05+00:00",
  "v": 2,
- "updated_ts": 1794148267.0935812,
+ "updated_ts": 1794192365.6268675,
  "provider": "Binance",
  "cap_source": "CoinGecko",
  "assets": [
   {
    "base": "BTC",
    "name": "Bitcoin",
-   "mcap": 1525059391824,
-   "qvol": 381255108.903538
+   "mcap": 1515272929882,
+   "qvol": 803222931.8612843
   },
   {
    "base": "ETH",
    "name": "Ethereum",
-   "mcap": 273091459127,
-   "qvol": 129791172.790444
-  },
-  {
-   "base": "ZEC",
-   "name": "Zcash",
-   "mcap": 21604122818,
-   "qvol": 104875852.41717
+   "mcap": 263114510049,
+   "qvol": 509759767.097343
   },
   {
    "base": "SOL",
    "name": "Solana",
-   "mcap": 52635751568,
-   "qvol": 55000879.82497
+   "mcap": 52092426770,
+   "qvol": 142100618.16755
+  },
+  {
+   "base": "ZEC",
+   "name": "Zcash",
+   "mcap": 21064472952,
+   "qvol": 130500465.89292
   },
   {
    "base": "XRP",
    "name": "XRP",
-   "mcap": 73520474733,
-   "qvol": 51119125.21715
+   "mcap": 71038370227,
+   "qvol": 121262657.40903
   },
   {
    "base": "BNB",
    "name": "BNB",
-   "mcap": 91489459804,
-   "qvol": 37206346.01109
+   "mcap": 90716966019,
+   "qvol": 75742702.01519
   },
   {
    "base": "NEAR",
    "name": "NEAR Protocol",
-   "mcap": 4829994419,
-   "qvol": 27527575.5978
-  },
-  {
-   "base": "UNI",
-   "name": "Uniswap",
-   "mcap": 4232344938,
-   "qvol": 22080766.77988
+   "mcap": 4768016567,
+   "qvol": 69880495.805
   },
   {
    "base": "PEPE",
    "name": "Pepe",
-   "mcap": 2109079167,
-   "qvol": 21801570.4475824
+   "mcap": 2139658699,
+   "qvol": 54358179.80228653
+  },
+  {
+   "base": "DOGE",
+   "name": "Dogecoin",
+   "mcap": 10981914094,
+   "qvol": 38474809.97908
   },
   {
    "base": "HYPE",
    "name": "Hyperliquid",
-   "mcap": 18509458131,
-   "qvol": 18382969.34533
+   "mcap": 17962908688,
+   "qvol": 29751389.31563
+  },
+  {
+   "base": "UNI",
+   "name": "Uniswap",
+   "mcap": 4231064846,
+   "qvol": 25608157.24816
+  },
+  {
+   "base": "SUI",
+   "name": "Sui",
+   "mcap": 3478513572,
+   "qvol": 23657819.10399
+  },
+  {
+   "base": "ENA",
+   "name": "Ethena",
+   "mcap": 2068034956,
+   "qvol": 21156634.000093
   },
   {
    "base": "U",
    "name": "United Stables",
-   "mcap": 1610553947,
-   "qvol": 15631298.4039
+   "mcap": 1610705718,
+   "qvol": 17611638.3482
   }
  ]
 }
