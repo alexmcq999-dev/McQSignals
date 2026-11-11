@@ -35,55 +35,12 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-11-11T15:29:59.999000+00:00",
-   "bars_held": 94,
+   "last_checked": "2026-11-11T15:44:59.999000+00:00",
+   "bars_held": 95,
    "id": "0025",
    "msg_ids": {
     "6542171685": 301,
     "278119034": 302
-   }
-  },
-  {
-   "symbol": "SUI",
-   "side": -1,
-   "entry": 0.8137,
-   "sl": 0.8447456922386561,
-   "tp1": 0.7671314616420157,
-   "tp2": 0.7205629232840314,
-   "risk": 0.031045692238656192,
-   "opened": "2026-11-10T15:59:59.999000+00:00",
-   "conf": 71.6,
-   "regime": "neutral",
-   "reasons": [
-    "ema_trend",
-    "supertrend",
-    "macd",
-    "rsi_regime",
-    "donchian",
-    "squeeze",
-    "vwap_obv"
-   ],
-   "kind": "trend",
-   "macro": "neutral",
-   "cost_r": 0.0393,
-   "atr": 0.012418276895462477,
-   "peak": 0.8033,
-   "status": "open",
-   "expires": "",
-   "filled": "",
-   "level": 0.0,
-   "target": 0.0,
-   "notes": "",
-   "exit_reason": "",
-   "r_gross": 0.0,
-   "r_net": 0.0,
-   "closed": "",
-   "last_checked": "2026-11-11T15:29:59.999000+00:00",
-   "bars_held": 94,
-   "id": "0026",
-   "msg_ids": {
-    "6542171685": 303,
-    "278119034": 304
    }
   },
   {
@@ -121,8 +78,8 @@
    "r_gross": 0.0,
    "r_net": 0.0,
    "closed": "",
-   "last_checked": "2026-11-11T15:29:59.999000+00:00",
-   "bars_held": 90,
+   "last_checked": "2026-11-11T15:44:59.999000+00:00",
+   "bars_held": 91,
    "id": "0027",
    "msg_ids": {
     "6542171685": 305,
