@@ -1002,6 +1002,49 @@
     "6542171685": 301,
     "278119034": 302
    }
+  },
+  {
+   "symbol": "ZEC",
+   "side": -1,
+   "entry": 1010.95,
+   "sl": 982.6415961933542,
+   "tp1": 919.9645,
+   "tp2": 828.979,
+   "risk": 60.65700000000001,
+   "opened": "2026-11-10T16:59:59.999000+00:00",
+   "conf": 79.1,
+   "regime": "trend",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "stoch_rsi",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.025,
+   "atr": 34.04719873111805,
+   "peak": 880.5,
+   "status": "closed",
+   "expires": "",
+   "filled": "",
+   "level": 0.0,
+   "target": 0.0,
+   "notes": "",
+   "exit_reason": "trail",
+   "r_gross": 0.983,
+   "r_net": 0.983,
+   "closed": "2026-11-13T13:44:59.999000+00:00",
+   "last_checked": "2026-11-13T13:44:59.999000+00:00",
+   "bars_held": 275,
+   "id": "0027",
+   "msg_ids": {
+    "6542171685": 305,
+    "278119034": 306
+   }
   }
  ]
 }
