@@ -959,6 +959,49 @@
     "6542171685": 303,
     "278119034": 304
    }
+  },
+  {
+   "symbol": "DOGE",
+   "side": -1,
+   "entry": 0.06762,
+   "sl": 0.06545170516757756,
+   "tp1": 0.06456786854052804,
+   "tp2": 0.06151573708105608,
+   "risk": 0.00203475430631464,
+   "opened": "2026-11-10T15:59:59.999000+00:00",
+   "conf": 71.6,
+   "regime": "neutral",
+   "reasons": [
+    "ema_trend",
+    "supertrend",
+    "macd",
+    "rsi_regime",
+    "donchian",
+    "squeeze",
+    "vwap_obv"
+   ],
+   "kind": "trend",
+   "macro": "neutral",
+   "cost_r": 0.0498,
+   "atr": 0.0008139017225258561,
+   "peak": 0.06301,
+   "status": "closed",
+   "expires": "",
+   "filled": "",
+   "level": 0.0,
+   "target": 0.0,
+   "notes": "",
+   "exit_reason": "trail",
+   "r_gross": 1.283,
+   "r_net": 1.283,
+   "closed": "2026-11-13T12:14:59.999000+00:00",
+   "last_checked": "2026-11-13T12:14:59.999000+00:00",
+   "bars_held": 273,
+   "id": "0025",
+   "msg_ids": {
+    "6542171685": 301,
+    "278119034": 302
+   }
   }
  ]
 }
